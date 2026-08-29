@@ -41,7 +41,7 @@ function isSafeUrl(url: string): boolean {
 }
 
 function renderSpan(span: Span): string {
-  const text = escapeHtml(span.text);
+  const text = escapeHtml(span.text.trim());
   const sup = citationSup(span.sourcePositions);
   return `${text}${sup}`;
 }
@@ -71,11 +71,11 @@ export function renderBlock(block: Block, opts: BlockRenderOptions = {}): string
     }
 
     case "paragraph": {
-      return `<p>${block.spans.map(renderSpan).join("")}</p>`;
+      return `<p>${block.spans.map(renderSpan).join(" ")}</p>`;
     }
 
     case "quote": {
-      return `<div class="quote">${block.spans.map(renderSpan).join("")}</div>`;
+      return `<div class="quote">${block.spans.map(renderSpan).join(" ")}</div>`;
     }
 
     case "callout": {
