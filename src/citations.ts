@@ -119,7 +119,7 @@ export class CitationResolver {
       markerHits.push(m);
       return "";
     });
-    const stripped = text.replace(CITATION_MARKER_RE, "");
+    const stripped = text.replace(/ \[(?:W|D)\d+\]/g, "").replace(CITATION_MARKER_RE, "");
     for (const m of markerHits) {
       const inner = m.slice(1, -1).toLowerCase();
       const pos = this.keyToPosition.get(inner);
