@@ -84,6 +84,68 @@ test("all documented callout variants render distinct styles", () => {
   }
 });
 
+test("marker-only span keeps its terminal period and glues to the prior sentence", () => {
+  const f = tempFile(
+    "punct-span.json",
+    JSON.stringify({
+      schema_version: "1.0",
+      report: {
+        metadata: { title: "Punct Span" },
+        sections: [
+          {
+            heading: "Section",
+            blocks: [
+              {
+                type: "paragraph",
+                text: "",
+                spans: [
+                  { text: "a wide array of disciplines ", citations: [] },
+                  { text: "[D41] [D14].", citations: ["7", "15"] },
+                  { text: "Since its rise, it spread", citations: [] },
+                ],
+              },
+            ],
+          },
+        ],
+        sources: [],
+      },
+    }),
+  );
+  const { html } = prepare(f, { outPath: "out/unused.pdf" });
+  assert.ok(
+    html.includes("array of disciplines. Since its rise"),
+    `expected glued period, got: ${html.match(/<p>[\s\S]*?<\/p>/)?.[0] ?? "(no <p>)"}`,
+  );
+  assert.ok(!html.includes("disciplines ."), "stranded space before period");
+  assert.ok(!html.includes("disciplines.."), "doubled period");
+});
+
+test("consecutive normal sentence spans get exactly one space", () => {
+  const f = tempFile(
+    "two-sentences.json",
+    docWith({
+      type: "paragraph",
+      text: "",
+      spans: [{ text: "First sentence. " }, { text: " Second sentence." }],
+    }),
+  );
+  const { html } = prepare(f, { outPath: "out/unused.pdf" });
+  assert.ok(html.includes("<p>First sentence. Second sentence.</p>"), html.match(/<p>[\s\S]*?<\/p>/)?.[0] ?? "(no <p>)");
+});
+
+test("whitespace-only span is still dropped", () => {
+  const f = tempFile(
+    "blank-span.json",
+    docWith({
+      type: "paragraph",
+      text: "",
+      spans: [{ text: "First sentence." }, { text: "   " }, { text: "Second sentence." }],
+    }),
+  );
+  const { html } = prepare(f, { outPath: "out/unused.pdf" });
+  assert.ok(html.includes("<p>First sentence. Second sentence.</p>"), html.match(/<p>[\s\S]*?<\/p>/)?.[0] ?? "(no <p>)");
+});
+
 test("figure with no url and no caption -> warning emitted, exit 0", async () => {
   const f = tempFile(
     "figure.json",

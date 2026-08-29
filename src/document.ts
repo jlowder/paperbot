@@ -302,6 +302,9 @@ function normalizeSource(raw: RawSource, position: number): Source {
   };
 }
 
+/** Terminal sentence punctuation: `.`, `!`, `?`, `…`. */
+const TERMINAL_PUNCT_RE = /[.!?\u2026]/u;
+
 /**
  * Resolve citations on a single text/refs pair, then apply the dropping
  * rules. Returns null when the span/item should be dropped entirely.
@@ -318,7 +321,13 @@ function resolveCitable(
     const hasContent = hasVisibleContent(text);
     return { text: hasContent ? text : "", sourcePositions: hasContent ? res.sourcePositions : [] };
   }
-  if (!hasVisibleContent(text)) return null;
+  const trimmed = text.trim();
+  // Keep spans whose only remaining content is terminal punctuation (e.g. the
+  // lone "." left after stripping a marker-only span like "[D41] [D14].");
+  // still drop whitespace-only spans.
+  if (trimmed === "" || (!hasVisibleContent(text) && !TERMINAL_PUNCT_RE.test(trimmed))) {
+    return null;
+  }
   return { text, sourcePositions: res.sourcePositions };
 }
 

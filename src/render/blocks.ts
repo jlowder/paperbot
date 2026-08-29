@@ -46,6 +46,20 @@ function renderSpan(span: Span): string {
   return `${text}${sup}`;
 }
 
+/**
+ * Join span texts for a paragraph/quote: a single space is inserted before a
+ * span only when its trimmed text starts with a letter or digit; spans
+ * starting with punctuation (e.g. a lone ".") glue directly to the prior span.
+ */
+function joinSpans(spans: Span[]): string {
+  let out = "";
+  for (const span of spans) {
+    if (out !== "" && /^[\p{L}\p{N}]/u.test(span.text.trim())) out += " ";
+    out += renderSpan(span);
+  }
+  return out;
+}
+
 function renderListItem(item: ListItem): string {
   const text = escapeHtml(item.text);
   const sup = citationSup(item.sourcePositions);
@@ -71,11 +85,11 @@ export function renderBlock(block: Block, opts: BlockRenderOptions = {}): string
     }
 
     case "paragraph": {
-      return `<p>${block.spans.map(renderSpan).join(" ")}</p>`;
+      return `<p>${joinSpans(block.spans)}</p>`;
     }
 
     case "quote": {
-      return `<div class="quote">${block.spans.map(renderSpan).join(" ")}</div>`;
+      return `<div class="quote">${joinSpans(block.spans)}</div>`;
     }
 
     case "callout": {
