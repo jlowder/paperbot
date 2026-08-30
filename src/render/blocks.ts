@@ -111,14 +111,34 @@ function renderSpan(span: Span, warnings: string[]): string {
 }
 
 /**
+ * True when a span's trimmed text should receive a leading space in
+ * joinSpans: it starts with a letter/digit, or it opens a math delimiter
+ * (`$`, `$$`, `\(`, `\[`). The producer emits each inline formula as a
+ * standalone span with the inter-word space at the span edge; renderCitedText
+ * trims those edges, so without the math case a math span would glue to the
+ * preceding word ("…form$\dot{x}$"). Punctuation-initial spans (".", ",")
+ * still glue directly — the terminal-punct behavior is preserved.
+ */
+function startsWithMathOrWord(t: string): boolean {
+  return (
+    /^[\p{L}\p{N}]/u.test(t) ||
+    /^\$\$/.test(t) ||
+    /^\$(?!\$)/.test(t) ||
+    /^\\\(/.test(t) ||
+    /^\\\[/.test(t)
+  );
+}
+
+/**
  * Join span texts for a paragraph/quote: a single space is inserted before a
- * span only when its trimmed text starts with a letter or digit; spans
- * starting with punctuation (e.g. a lone ".") glue directly to the prior span.
+ * span only when its trimmed text starts with a letter, digit, or math
+ * delimiter (see startsWithMathOrWord); spans starting with other
+ * punctuation (e.g. a lone ".") glue directly to the prior span.
  */
 function joinSpans(spans: Span[], warnings: string[]): string {
   let out = "";
   for (const span of spans) {
-    if (out !== "" && /^[\p{L}\p{N}]/u.test(span.text.trim())) out += " ";
+    if (out !== "" && startsWithMathOrWord(span.text.trim())) out += " ";
     out += renderSpan(span, warnings);
   }
   return out;

@@ -116,6 +116,39 @@ test("invalid tex in a span -> math-fallback span + exactly 1 warning", () => {
   assert.equal(katexCount(html), 0, "no katex output for invalid tex");
 });
 
+test("standalone math spans get a leading space from joinSpans; commas still glue", () => {
+  // Mirrors the producer's real output: each inline formula is its own span
+  // and the inter-word spaces sit at the (trimmed-away) span edges.
+  const f = tempFile(
+    "standalone-math.json",
+    docWith({
+      type: "paragraph",
+      text: "",
+      spans: [
+        { text: "…in the compact vector form " },
+        { text: "$\\dot{x} = f(x, t)$" },
+        { text: ", where the state " },
+        { text: "$x$" },
+        { text: " summarizes…" },
+      ],
+    }),
+  );
+  const { html, warnings } = prepare(f, { outPath: "out/unused.pdf" });
+  assert.ok(
+    html.includes('vector form <span class="katex">'),
+    "a space must separate the word from a standalone math span",
+  );
+  assert.ok(
+    html.includes("</span>, where the state"),
+    "no space between a math span and the following comma",
+  );
+  assert.ok(
+    html.includes("</span> summarizes…"),
+    "a space must separate a standalone math span from the following word",
+  );
+  assert.deepEqual(warnings, []);
+});
+
 test("code_block language latex typesets as display; invalid falls back; other langs unchanged", () => {
   const f = tempFile(
     "latex-code.json",
