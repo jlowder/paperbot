@@ -86,6 +86,8 @@ export interface FigureBlock {
 export interface EquationBlock {
   type: "equation";
   text: string;
+  /** Optional producer hint, e.g. "latex"/"tex" (default ""). */
+  language: string;
 }
 
 export interface PageBreakBlock {
@@ -431,7 +433,7 @@ function normalizeBlock(
 
     case "equation": {
       if (raw.text.trim() === "") return null;
-      return { type: "equation", text: raw.text.trim() };
+      return { type: "equation", text: raw.text.trim(), language: raw.language.trim() };
     }
 
     case "page_break":

@@ -4,7 +4,8 @@
  */
 import type { DocumentModel } from "../document.js";
 import { escapeHtml, renderBlock, renderReferences } from "./blocks.js";
-import { REPORT_CSS } from "./css.js";
+import { REPORT_CSS, MATH_CSS } from "./css.js";
+import { katexStylesheet } from "./math.js";
 
 const MONTHS = [
   "January",
@@ -115,7 +116,7 @@ export function renderHtml(model: DocumentModel, opts: HtmlRenderOptions = {}): 
     `<meta charset="utf-8">\n` +
     `<meta name="viewport" content="width=device-width, initial-scale=1">\n` +
     `<title>${escapeHtml(title)}</title>\n` +
-    `<style>${REPORT_CSS}</style>\n` +
+    `<style>${REPORT_CSS}\n${MATH_CSS}\n${katexStylesheet()}</style>\n` +
     `</head>\n` +
     `<body>\n${body}\n</body>\n` +
     `</html>\n`

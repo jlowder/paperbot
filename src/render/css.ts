@@ -395,3 +395,21 @@ figcaption {
   height: 0;
 }
 `;
+
+/**
+ * Companion rules for the math renderers (blocks.ts / math.ts). Kept apart
+ * from REPORT_CSS so html.ts can pair it with katexStylesheet() (the KaTeX
+ * stylesheet + inlined fonts) as a second embedded layer.
+ */
+export const MATH_CSS = `
+/* --- math (KaTeX) --- */
+
+.math-fallback {
+  font-family: var(--mono, monospace);
+  color: var(--faint, #888);
+}
+
+.equation .katex-display {
+  margin: 1em 0;
+}
+`;

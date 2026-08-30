@@ -14,6 +14,7 @@ import {
   type TableCell,
 } from "../document.js";
 import { citationSup } from "../citations.js";
+import { renderMath, splitMath, stripMathDelimiters } from "./math.js";
 
 /** Escape a string for safe use in an HTML text node. */
 export function escapeHtml(s: string): string {
@@ -40,32 +41,73 @@ function isSafeUrl(url: string): boolean {
   }
 }
 
+/** Flush renderer-side warnings (math fallbacks, skipped figures, ...). */
+function reportWarnings(warnings: readonly string[], opts: BlockRenderOptions): void {
+  for (const w of warnings) opts.onWarning?.(w);
+}
+
 /**
- * Render cited text: escaped text + citation sup. When the (trimmed) text
- * ends in a terminal mark (one of `.`, `!`, `?`) and carries a citation, the
- * sup goes between the last word and the mark — `word [4,5].`, never
- * `word.[4,5]`: one space before the sup, the mark after it. The space the
- * marker strip in citations.ts consumed is re-inserted here; any other
+ * Render cited text (escaped text + math groups + citation sup). Math is
+ * extracted first via splitMath: text segments are escaped, math groups are
+ * typeset by renderMath (invalid TeX -> visible fallback + warning). The
+ * terminal-punct rule (applied to the whole text when math is absent, to the
+ * trailing text segment when it is present) orders the sup as `word [4,5].`,
+ * never `word.[4,5]`: one space before the sup, the mark after it. The space
+ * the marker strip in citations.ts consumed is re-inserted here; any other
  * trailing space before the mark is dropped (also normalizes "word ." ->
- * "word."). Without a citation the text just normalizes to "word."; text
- * not ending in a terminal mark keeps the sup directly after it.
+ * "word."). Without a citation the text just normalizes to "word."; a span
+ * ending in a math group has no terminal punct (the formula is
+ * self-contained) and the sup, if any, follows it.
  */
-function renderCitedText(text: string, positions: readonly number[]): string {
+function renderCitedText(text: string, positions: readonly number[], warnings: string[]): string {
   const raw = text.trim();
   const sup = citationSup(positions);
-  const m = raw.match(/^(.*?)([.!?]+)$/s);
-  if (m) {
-    const base = m[1].replace(/\s+$/, "");
-    const punct = m[2];
-    if (sup) return (base ? escapeHtml(base) + " " : " ") + sup + escapeHtml(punct);
-    return escapeHtml(base + punct);
+  const segments = splitMath(raw);
+
+  if (segments.length === 1 && segments[0].kind === "text") {
+    // No math markers: whole-text punct rule (unchanged legacy behavior).
+    const m = raw.match(/^(.*?)([.!?]+)$/s);
+    if (m) {
+      const base = m[1].replace(/\s+$/, "");
+      const punct = m[2];
+      if (sup) return (base ? escapeHtml(base) + " " : " ") + sup + escapeHtml(punct);
+      return escapeHtml(base + punct);
+    }
+    return escapeHtml(raw) + sup;
   }
-  return escapeHtml(raw) + sup;
+
+  // Math present: render segment by segment; text segments are escaped.
+  // The trailing-punct rule applies only to a trailing TEXT segment — a
+  // span ending in a math group has no terminal punct (the formula is
+  // self-contained); the sup, if any, follows the trailing group.
+  let out = "";
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    if (seg.kind === "math") {
+      out += renderMath(seg.tex, seg.display, warnings);
+      continue;
+    }
+    if (i < segments.length - 1) {
+      out += escapeHtml(seg.text);
+      continue;
+    }
+    const m = seg.text.match(/^(.*?)([.!?]+)$/s);
+    if (m) {
+      const base = m[1].replace(/\s+$/, "");
+      const punct = m[2];
+      if (sup) out += (base ? escapeHtml(base) + " " : " ") + sup + escapeHtml(punct);
+      else out += escapeHtml(base + punct);
+    } else {
+      out += escapeHtml(seg.text);
+    }
+  }
+  if (segments[segments.length - 1].kind === "math" && sup !== "") out += sup;
+  return out;
 }
 
 /** Render one span: see renderCitedText for the citation ordering rules. */
-function renderSpan(span: Span): string {
-  return renderCitedText(span.text, span.sourcePositions);
+function renderSpan(span: Span, warnings: string[]): string {
+  return renderCitedText(span.text, span.sourcePositions, warnings);
 }
 
 /**
@@ -73,21 +115,21 @@ function renderSpan(span: Span): string {
  * span only when its trimmed text starts with a letter or digit; spans
  * starting with punctuation (e.g. a lone ".") glue directly to the prior span.
  */
-function joinSpans(spans: Span[]): string {
+function joinSpans(spans: Span[], warnings: string[]): string {
   let out = "";
   for (const span of spans) {
     if (out !== "" && /^[\p{L}\p{N}]/u.test(span.text.trim())) out += " ";
-    out += renderSpan(span);
+    out += renderSpan(span, warnings);
   }
   return out;
 }
 
-function renderListItem(item: ListItem): string {
-  return `<li>${renderCitedText(item.text, item.sourcePositions)}</li>`;
+function renderListItem(item: ListItem, warnings: string[]): string {
+  return `<li>${renderCitedText(item.text, item.sourcePositions, warnings)}</li>`;
 }
 
-function renderTableCell(cell: TableCell): string {
-  return `<td>${renderCitedText(cell.text, cell.sourcePositions)}</td>`;
+function renderTableCell(cell: TableCell, warnings: string[]): string {
+  return `<td>${renderCitedText(cell.text, cell.sourcePositions, warnings)}</td>`;
 }
 
 export interface BlockRenderOptions {
@@ -103,30 +145,42 @@ export function renderBlock(block: Block, opts: BlockRenderOptions = {}): string
     }
 
     case "paragraph": {
-      return `<p>${joinSpans(block.spans)}</p>`;
+      const warnings: string[] = [];
+      const html = `<p>${joinSpans(block.spans, warnings)}</p>`;
+      reportWarnings(warnings, opts);
+      return html;
     }
 
     case "quote": {
-      return `<div class="quote">${joinSpans(block.spans)}</div>`;
+      const warnings: string[] = [];
+      const html = `<div class="quote">${joinSpans(block.spans, warnings)}</div>`;
+      reportWarnings(warnings, opts);
+      return html;
     }
 
     case "callout": {
+      const warnings: string[] = [];
       const title = block.calloutTitle !== "" ? block.calloutTitle : "Note";
       const body = block.spans
-        .map((s) => `<p>${renderSpan(s)}</p>`)
+        .map((s) => `<p>${renderSpan(s, warnings)}</p>`)
         .join("");
-      return `<div class="callout ${block.calloutType}"><span class="callout-title">${escapeHtml(
+      const html = `<div class="callout ${block.calloutType}"><span class="callout-title">${escapeHtml(
         title,
       )}</span>${body}</div>`;
+      reportWarnings(warnings, opts);
+      return html;
     }
 
     case "citation_note": {
       // Source note: callout styling, verbatim prose (no citation sups).
+      const warnings: string[] = [];
       const title = block.calloutTitle !== "" ? block.calloutTitle : "Sources";
       const body = block.spans
-        .map((s) => `<p>${renderSpan(s)}</p>`)
+        .map((s) => `<p>${renderSpan(s, warnings)}</p>`)
         .join("");
-      return `<div class="callout note"><span class="callout-title">${escapeHtml(title)}</span>${body}</div>`;
+      const html = `<div class="callout note"><span class="callout-title">${escapeHtml(title)}</span>${body}</div>`;
+      reportWarnings(warnings, opts);
+      return html;
     }
 
     case "comparison_table": {
@@ -137,24 +191,41 @@ export function renderBlock(block: Block, opts: BlockRenderOptions = {}): string
       const head = block.columns
         .map((c) => `<th>${escapeHtml(c)}</th>`)
         .join("");
+      const warnings: string[] = [];
       const rows = block.rows
-        .map((row) => `<tr>${row.map(renderTableCell).join("")}</tr>`)
+        .map((row) => `<tr>${row.map((c) => renderTableCell(c, warnings)).join("")}</tr>`)
         .join("");
       parts.push(
         `<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`,
       );
-      return parts.join("");
+      const html = parts.join("");
+      reportWarnings(warnings, opts);
+      return html;
     }
 
     case "ordered_list": {
-      return `<ol>${block.items.map(renderListItem).join("")}</ol>`;
+      const warnings: string[] = [];
+      const html = `<ol>${block.items.map((it) => renderListItem(it, warnings)).join("")}</ol>`;
+      reportWarnings(warnings, opts);
+      return html;
     }
 
     case "unordered_list": {
-      return `<ul>${block.items.map(renderListItem).join("")}</ul>`;
+      const warnings: string[] = [];
+      const html = `<ul>${block.items.map((it) => renderListItem(it, warnings)).join("")}</ul>`;
+      reportWarnings(warnings, opts);
+      return html;
     }
 
     case "code_block": {
+      // latex/tex code blocks are typeset as a display equation; everything
+      // else renders as a plain code block, unchanged.
+      if (block.language.toLowerCase() === "latex" || block.language.toLowerCase() === "tex") {
+        const warnings: string[] = [];
+        const html = `<div class="equation">${renderMath(block.text.trim(), true, warnings)}</div>`;
+        reportWarnings(warnings, opts);
+        return html;
+      }
       const langAttr =
         block.language !== "" ? ` class="language-${escapeAttr(block.language)}"` : "";
       return `<pre${langAttr}><code>${escapeHtml(block.text)}</code></pre>`;
@@ -176,6 +247,16 @@ export function renderBlock(block: Block, opts: BlockRenderOptions = {}): string
     }
 
     case "equation": {
+      const t = block.text.trim();
+      const tex = stripMathDelimiters(t);
+      // Typeset when the producer said so (language latex/tex) or when the
+      // text carries $$ / \[ \] delimiters; otherwise the plain div.
+      if (block.language.trim().toLowerCase() === "latex" || block.language.trim().toLowerCase() === "tex" || tex !== t) {
+        const warnings: string[] = [];
+        const html = `<div class="equation">${renderMath(tex, true, warnings)}</div>`;
+        reportWarnings(warnings, opts);
+        return html;
+      }
       return `<div class="equation">${escapeHtml(block.text)}</div>`;
     }
 
