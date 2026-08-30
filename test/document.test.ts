@@ -107,17 +107,61 @@ test("marker-only span keeps its terminal period and glues to the prior sentence
             ],
           },
         ],
-        sources: [],
+        // 15 sources so the span's numeric refs ["7","15"] resolve to a real sup.
+        sources: Array.from({ length: 15 }, (_, i) => ({ title: `Source ${i + 1}` })),
       },
     }),
   );
   const { html } = prepare(f, { outPath: "out/unused.pdf" });
   assert.ok(
-    html.includes("array of disciplines. Since its rise"),
-    `expected glued period, got: ${html.match(/<p>[\s\S]*?<\/p>/)?.[0] ?? "(no <p>)"}`,
+    html.includes(
+      'array of disciplines <sup class="cite"><a href="#src-7">[7,15]</a></sup>. Since its rise',
+    ),
+    `expected "disciplines [7,15]. Since" (space, sup, period), got: ${html.match(/<p>[\s\S]*?<\/p>/)?.[0] ?? "(no <p>)"}`,
   );
   assert.ok(!html.includes("disciplines ."), "stranded space before period");
   assert.ok(!html.includes("disciplines.."), "doubled period");
+});
+
+test("cited span ending in a period renders as word [1,2]. Next", () => {
+  const f = tempFile(
+    "eos-citation.json",
+    JSON.stringify({
+      schema_version: "1.0",
+      report: {
+        metadata: { title: "EOS Citation" },
+        sections: [
+          {
+            heading: "Section",
+            blocks: [
+              {
+                type: "paragraph",
+                text: "",
+                spans: [
+                  { text: "This provides the underlying information [W4].", citations: ["2"] },
+                  { text: "For an input matrix X with dimension d", citations: [] },
+                ],
+              },
+            ],
+          },
+        ],
+        sources: [
+          { title: "First source", citation_key: "W4" },
+          { title: "Second source" },
+        ],
+      },
+    }),
+  );
+  const { html } = prepare(f, { outPath: "out/unused.pdf" });
+  const p = html.match(/<p>[\s\S]*?<\/p>/)?.[0] ?? "(no <p>)";
+  // Order: last char, SPACE, sup, PERIOD, space, first char of next sentence.
+  assert.ok(
+    html.includes(
+      'underlying information <sup class="cite"><a href="#src-1">[1,2]</a></sup>. For an input matrix',
+    ),
+    `expected "information [1,2]. For" in the new order, got: ${p}`,
+  );
+  assert.ok(!html.includes("information.<sup"), `sup must precede the period, got: ${p}`);
 });
 
 test("consecutive normal sentence spans get exactly one space", () => {

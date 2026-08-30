@@ -40,10 +40,26 @@ function isSafeUrl(url: string): boolean {
   }
 }
 
+/**
+ * Render one span: visible text + citation sup. When the span ends in a
+ * terminal mark (one of `.`, `!`, `?`) and carries a citation, the sup goes
+ * between the last word and the mark — `word [4,5].`, never `word.[4,5]`:
+ * one space before the sup, the mark after it. The space the marker strip in
+ * citations.ts consumed is re-inserted here; any other trailing space before
+ * the mark is dropped (also normalizes "word ." -> "word."). Spans not
+ * ending in a terminal mark keep the sup directly after the text.
+ */
 function renderSpan(span: Span): string {
-  const text = escapeHtml(span.text.trim());
+  const raw = span.text.trim();
   const sup = citationSup(span.sourcePositions);
-  return `${text}${sup}`;
+  const m = raw.match(/^(.*?)([.!?]+)$/s);
+  if (m) {
+    const base = m[1].replace(/\s+$/, "");
+    const punct = m[2];
+    if (sup) return (base ? escapeHtml(base) + " " : " ") + sup + escapeHtml(punct);
+    return escapeHtml(base + punct);
+  }
+  return escapeHtml(raw) + sup;
 }
 
 /**
