@@ -164,6 +164,43 @@ test("cited span ending in a period renders as word [1,2]. Next", () => {
   assert.ok(!html.includes("information.<sup"), `sup must precede the period, got: ${p}`);
 });
 
+test("list item ending in a period renders as word [1]. per the citation convention", () => {
+  const f = tempFile(
+    "eos-list-item.json",
+    JSON.stringify({
+      schema_version: "1.0",
+      report: {
+        metadata: { title: "EOS List Item" },
+        sections: [
+          {
+            heading: "Section",
+            blocks: [
+              {
+                type: "unordered_list",
+                items: [
+                  { text: "Most effective on ImageNet and CIFAR-10 datasets [W3]. " },
+                  { text: "Plain item without a period" },
+                ],
+              },
+            ],
+          },
+        ],
+        sources: [{ title: "Third source", citation_key: "W3" }],
+      },
+    }),
+  );
+  const { html } = prepare(f, { outPath: "out/unused.pdf" });
+  const li = html.match(/<li>[\s\S]*?datasets[\s\S]*?<\/li>/)?.[0] ?? "(no item)";
+  assert.ok(
+    html.includes(
+      'CIFAR-10 datasets <sup class="cite"><a href="#src-1">[1]</a></sup>.</li>',
+    ),
+    `expected "datasets [1].</li>" (space, sup, period), got: ${li}`,
+  );
+  assert.ok(!html.includes("datasets.<sup"), "sup must precede the period in list items");
+  assert.ok(html.includes("<li>Plain item without a period</li>"), "item without a mark unchanged");
+});
+
 test("consecutive normal sentence spans get exactly one space", () => {
   const f = tempFile(
     "two-sentences.json",

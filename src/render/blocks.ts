@@ -41,17 +41,18 @@ function isSafeUrl(url: string): boolean {
 }
 
 /**
- * Render one span: visible text + citation sup. When the span ends in a
- * terminal mark (one of `.`, `!`, `?`) and carries a citation, the sup goes
- * between the last word and the mark — `word [4,5].`, never `word.[4,5]`:
- * one space before the sup, the mark after it. The space the marker strip in
- * citations.ts consumed is re-inserted here; any other trailing space before
- * the mark is dropped (also normalizes "word ." -> "word."). Spans not
- * ending in a terminal mark keep the sup directly after the text.
+ * Render cited text: escaped text + citation sup. When the (trimmed) text
+ * ends in a terminal mark (one of `.`, `!`, `?`) and carries a citation, the
+ * sup goes between the last word and the mark — `word [4,5].`, never
+ * `word.[4,5]`: one space before the sup, the mark after it. The space the
+ * marker strip in citations.ts consumed is re-inserted here; any other
+ * trailing space before the mark is dropped (also normalizes "word ." ->
+ * "word."). Without a citation the text just normalizes to "word."; text
+ * not ending in a terminal mark keeps the sup directly after it.
  */
-function renderSpan(span: Span): string {
-  const raw = span.text.trim();
-  const sup = citationSup(span.sourcePositions);
+function renderCitedText(text: string, positions: readonly number[]): string {
+  const raw = text.trim();
+  const sup = citationSup(positions);
   const m = raw.match(/^(.*?)([.!?]+)$/s);
   if (m) {
     const base = m[1].replace(/\s+$/, "");
@@ -60,6 +61,11 @@ function renderSpan(span: Span): string {
     return escapeHtml(base + punct);
   }
   return escapeHtml(raw) + sup;
+}
+
+/** Render one span: see renderCitedText for the citation ordering rules. */
+function renderSpan(span: Span): string {
+  return renderCitedText(span.text, span.sourcePositions);
 }
 
 /**
@@ -77,15 +83,11 @@ function joinSpans(spans: Span[]): string {
 }
 
 function renderListItem(item: ListItem): string {
-  const text = escapeHtml(item.text);
-  const sup = citationSup(item.sourcePositions);
-  return `<li>${text}${sup}</li>`;
+  return `<li>${renderCitedText(item.text, item.sourcePositions)}</li>`;
 }
 
 function renderTableCell(cell: TableCell): string {
-  const text = escapeHtml(cell.text);
-  const sup = citationSup(cell.sourcePositions);
-  return `<td>${text}${sup}</td>`;
+  return `<td>${renderCitedText(cell.text, cell.sourcePositions)}</td>`;
 }
 
 export interface BlockRenderOptions {
