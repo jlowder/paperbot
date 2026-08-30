@@ -92,6 +92,13 @@ export interface PageBreakBlock {
   type: "page_break";
 }
 
+/** Producer-provided source note: verbatim prose, no citation resolution. */
+export interface CitationNoteBlock {
+  type: "citation_note";
+  spans: Span[];
+  calloutTitle: string;
+}
+
 /** A block of unknown type, kept but rendered as a paragraph when it has text. */
 export interface UnknownBlock {
   type: `unknown:${string}`;
@@ -107,6 +114,7 @@ export type Block =
   | FigureBlock
   | EquationBlock
   | PageBreakBlock
+  | CitationNoteBlock
   | UnknownBlock;
 
 export interface Section {
@@ -428,6 +436,25 @@ function normalizeBlock(
 
     case "page_break":
       return { type: "page_break" };
+
+    case "citation_note": {
+      // Producer source note: the span text is a self-contained source list
+      // (W-references are deliberate prose, not bracket markers). Keep the
+      // text verbatim (trimmed) — no marker stripping, no citation
+      // resolution, no sourcePositions.
+      const rawSpans: RawCitable[] =
+        raw.spans.length > 0
+          ? raw.spans
+          : raw.text.trim() !== ""
+            ? [{ text: raw.text, citations: [] }]
+            : [];
+      const spans = rawSpans
+        .map((s) => s.text.trim())
+        .filter((t) => hasVisibleContent(t))
+        .map((t) => ({ text: t, sourcePositions: [] as number[] }));
+      if (spans.length === 0) return null;
+      return { type: "citation_note", spans, calloutTitle: raw.callout_title.trim() };
+    }
 
     default: {
       // Unknown type: keep the block, render its text (if any) as a

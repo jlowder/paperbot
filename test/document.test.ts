@@ -201,6 +201,46 @@ test("list item ending in a period renders as word [1]. per the citation convent
   assert.ok(html.includes("<li>Plain item without a period</li>"), "item without a mark unchanged");
 });
 
+test("citation_note block renders as a Sources callout, verbatim, no citation sups", () => {
+  const f = tempFile(
+    "citation-note.json",
+    JSON.stringify({
+      schema_version: "1.0",
+      report: {
+        metadata: { title: "Citation Note" },
+        sections: [
+          {
+            heading: "Section",
+            blocks: [
+              {
+                type: "citation_note",
+                text: "",
+                spans: [
+                  {
+                    text: "Sources used in this section: W9 (Treibergs) for definitions; W10 (SIAM) for surveys.",
+                    citations: ["1"],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        sources: [{ title: "First source" }],
+      },
+    }),
+  );
+  const { html, warnings } = prepare(f, { outPath: "out/unused.pdf" });
+  assert.ok(
+    !warnings.some((w) => w.includes("unknown block type")),
+    `citation_note must not warn, got: ${warnings.join("; ")}`,
+  );
+  assert.ok(html.includes('class="callout note"'), html);
+  assert.ok(html.includes("Sources</span>"), "default title must be Sources");
+  assert.ok(html.includes("W9 (Treibergs) for definitions"), "note text must appear verbatim");
+  const note = html.match(/<div class="callout note">[\s\S]*?<\/div>/)?.[0] ?? "(no note)";
+  assert.ok(!note.includes('<span class="cite">'), `no citation sups in the note, got: ${note}`);
+});
+
 test("consecutive normal sentence spans get exactly one space", () => {
   const f = tempFile(
     "two-sentences.json",

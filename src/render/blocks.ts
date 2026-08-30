@@ -120,6 +120,15 @@ export function renderBlock(block: Block, opts: BlockRenderOptions = {}): string
       )}</span>${body}</div>`;
     }
 
+    case "citation_note": {
+      // Source note: callout styling, verbatim prose (no citation sups).
+      const title = block.calloutTitle !== "" ? block.calloutTitle : "Sources";
+      const body = block.spans
+        .map((s) => `<p>${renderSpan(s)}</p>`)
+        .join("");
+      return `<div class="callout note"><span class="callout-title">${escapeHtml(title)}</span>${body}</div>`;
+    }
+
     case "comparison_table": {
       const parts: string[] = [];
       if (block.caption !== "") {
