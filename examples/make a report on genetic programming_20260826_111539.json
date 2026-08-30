@@ -225,55 +225,55 @@
                 ]
               },
               {
-                "text": "eliminating the need for the user to specify the structural form of the solution in advance",
+                "text": "eliminating the need for the user to specify the structural form of the solution in advance.",
                 "citations": [
                   "1"
                 ]
               },
               {
-                "text": "The fundamental workflow begins by randomly generating an initial population of programs derived from a predefined set of available mathematical, logical, and functional primitives",
+                "text": "The fundamental workflow begins by randomly generating an initial population of programs derived from a predefined set of available mathematical, logical, and functional primitives.",
                 "citations": [
                   "14"
                 ]
               },
               {
-                "text": "Once this initial cohort is created, every single program within the population is independently executed to ascertain its performance quality on the target task",
+                "text": "Once this initial cohort is created, every single program within the population is independently executed to ascertain its performance quality on the target task.",
                 "citations": [
                   "14"
                 ]
               },
               {
-                "text": "This execution yields a quantitative performance metric that serves as the program's cumulative fitness value",
+                "text": "This execution yields a quantitative performance metric that serves as the program's cumulative fitness value.",
                 "citations": [
                   "8"
                 ]
               },
               {
-                "text": "Selection mechanisms then probabilistically choose one or two parent programs from the evaluated cohort based on their relative fitness rankings",
+                "text": "Selection mechanisms then probabilistically choose one or two parent programs from the evaluated cohort based on their relative fitness rankings.",
                 "citations": [
                   "14"
                 ]
               },
               {
-                "text": "This directed selection pressure ensures that higher-performing program architectures consistently exert greater genetic influence over subsequent generations",
+                "text": "This directed selection pressure ensures that higher-performing program architectures consistently exert greater genetic influence over subsequent generations.",
                 "citations": [
                   "13"
                 ]
               },
               {
-                "text": "The iterative cycle of evaluation and selection continues until either a mathematically acceptable solution threshold is reached or a strict maximum generation count terminates the process",
+                "text": "The iterative cycle of evaluation and selection continues until either a mathematically acceptable solution threshold is reached or a strict maximum generation count terminates the process.",
                 "citations": [
                   "14"
                 ]
               },
               {
-                "text": "Upon completion, the algorithm returns the singular best-so-far individual discovered across the entire search trajectory",
+                "text": "Upon completion, the algorithm returns the singular best-so-far individual discovered across the entire search trajectory.",
                 "citations": [
                   "14"
                 ]
               },
               {
-                "text": "A defining structural distinction separates standard GP from conventional genetic algorithms",
+                "text": "A defining structural distinction separates standard GP from conventional genetic algorithms.",
                 "citations": [
                   "15"
                 ]
@@ -285,13 +285,13 @@
                 ]
               },
               {
-                "text": "the standard GP representation actively accommodates variable-length, recursively structured program trees that dynamically expand or contract during adaptation",
+                "text": "the standard GP representation actively accommodates variable-length, recursively structured program trees that dynamically expand or contract during adaptation.",
                 "citations": [
                   "15"
                 ]
               },
               {
-                "text": "This evolutionary flexibility allows the autonomous machine to determine both the necessary computational libraries and the exact hierarchical nesting depth required to solve complex mathematical problems",
+                "text": "This evolutionary flexibility allows the autonomous machine to determine both the necessary computational libraries and the exact hierarchical nesting depth required to solve complex mathematical problems.",
                 "citations": [
                   "13"
                 ]
@@ -303,7 +303,7 @@
                 ]
               },
               {
-                "text": "that reliably converges toward high-quality symbolic regression models and automated function definitions",
+                "text": "that reliably converges toward high-quality symbolic regression models and automated function definitions.",
                 "citations": [
                   "16"
                 ]
@@ -338,49 +338,49 @@
             "text": "",
             "spans": [
               {
-                "text": "To produce novel offspring, the algorithm applies specific genetic operations such as subtree crossover and point mutation",
+                "text": "To produce novel offspring, the algorithm applies specific genetic operations such as subtree crossover and point mutation.",
                 "citations": [
                   "13"
                 ]
               },
               {
-                "text": "Crossover operates by exchanging functional sub-trees between two selected parent programs, effectively recombining successful computational modules into entirely new architectural configurations",
+                "text": "Crossover operates by exchanging functional sub-trees between two selected parent programs, effectively recombining successful computational modules into entirely new architectural configurations.",
                 "citations": [
                   "13"
                 ]
               },
               {
-                "text": "Point mutation subsequently introduces controlled random alterations by replacing a randomly selected node with a freshly generated subtree drawn from the same primitive pool",
+                "text": "Point mutation subsequently introduces controlled random alterations by replacing a randomly selected node with a freshly generated subtree drawn from the same primitive pool.",
                 "citations": [
                   "13"
                 ]
               },
               {
-                "text": "These operators execute with specified probabilistic weights to balance exploratory search with exploitative refinement",
+                "text": "These operators execute with specified probabilistic weights to balance exploratory search with exploitative refinement.",
                 "citations": [
                   "14"
                 ]
               },
               {
-                "text": "Parallel to variation, elitism mechanisms actively safeguard computational progress",
+                "text": "Parallel to variation, elitism mechanisms actively safeguard computational progress.",
                 "citations": [
                   "15"
                 ]
               },
               {
-                "text": "The system preserves the highest-fitness program from the current generation so it survives intact into the succeeding cohort without undergoing destructive alteration",
+                "text": "The system preserves the highest-fitness program from the current generation so it survives intact into the succeeding cohort without undergoing destructive alteration.",
                 "citations": [
                   "15"
                 ]
               },
               {
-                "text": "This mandatory survival property guarantees monotonically non-decreasing solution quality across generations",
+                "text": "This mandatory survival property guarantees monotonically non-decreasing solution quality across generations.",
                 "citations": [
                   "15"
                 ]
               },
               {
-                "text": "Furthermore, preserving elite individuals indirectly mitigates population bloat by preventing the unnecessary proliferation of structurally complex but functionally redundant program trees",
+                "text": "Furthermore, preserving elite individuals indirectly mitigates population bloat by preventing the unnecessary proliferation of structurally complex but functionally redundant program trees.",
                 "citations": [
                   "15"
                 ]
@@ -392,7 +392,7 @@
                 ]
               },
               {
-                "text": "that consistently achieve competitive performance metrics",
+                "text": "that consistently achieve competitive performance metrics.",
                 "citations": []
               }
             ],
@@ -431,37 +431,37 @@
             "text": "",
             "spans": [
               {
-                "text": "Genetic programming has spawned numerous structural variants beyond standard tree-based representations to improve computational efficiency and program expressiveness across diverse scientific domains ",
+                "text": "Genetic programming has spawned numerous structural variants beyond standard tree-based representations to improve computational efficiency and program expressiveness across diverse scientific domains.",
                 "citations": [
                   "7"
                 ]
               },
               {
-                "text": "Linear genetic programming (LGP) represents programs as linear code structures analogous to machine instructions in a register-based architecture, allowing direct synthesis of computer programs without intermediate tree conversion ",
+                "text": "Linear genetic programming (LGP) represents programs as linear code structures analogous to machine instructions in a register-based architecture, allowing direct synthesis of computer programs without intermediate tree conversion.",
                 "citations": [
                   "17"
                 ]
               },
               {
-                "text": "Koza's sub-machine-code genetic programming further minimizes representation overhead by encoding evolved programs as direct machine-code instructions ",
+                "text": "Koza's sub-machine-code genetic programming further minimizes representation overhead by encoding evolved programs as direct machine-code instructions.",
                 "citations": [
                   "18"
                 ]
               },
               {
-                "text": "For complex hierarchical designs, architecture-altering operations enable the evolution of graph-based programs rather than fixed trees, supporting shared code and recursion through auxiliary symbols ",
+                "text": "For complex hierarchical designs, architecture-altering operations enable the evolution of graph-based programs rather than fixed trees, supporting shared code and recursion through auxiliary symbols.",
                 "citations": [
                   "19"
                 ]
               },
               {
-                "text": "Hybrid data structures, such as integrating evolutionary program design with binary decision diagrams, have also been explored to impose structure on evolved representations for compact decision models ",
+                "text": "Hybrid data structures, such as integrating evolutionary program design with binary decision diagrams, have also been explored to impose structure on evolved representations for compact decision models.",
                 "citations": [
                   "20"
                 ]
               },
               {
-                "text": "Since the linear instruction set directly mirrors traditional programming languages, it can be more effective to synthesize computer programs than standard tree graphs ",
+                "text": "Since the linear instruction set directly mirrors traditional programming languages, it can be more effective to synthesize computer programs than standard tree graphs.",
                 "citations": [
                   "17"
                 ]
@@ -500,43 +500,43 @@
                 "citations": []
               },
               {
-                "text": "Elitism strategies are commonly applied to guarantee the preservation of high-fitness individuals across generations, which directly mitigates the bloat problem while accelerating convergence ",
+                "text": "Elitism strategies are commonly applied to guarantee the preservation of high-fitness individuals across generations, which directly mitigates the bloat problem while accelerating convergence.",
                 "citations": [
                   "21"
                 ]
               },
               {
-                "text": "Researchers have also investigated the intensive application of the mutation operator as a distinct mechanism to improve generalization, particularly when dealing with sparse training datasets ",
+                "text": "Researchers have also investigated the intensive application of the mutation operator as a distinct mechanism to improve generalization, particularly when dealing with sparse training datasets.",
                 "citations": [
                   "22"
                 ]
               },
               {
-                "text": "Hybridization with statistical machine learning frameworks has introduced boosting techniques to genetic programming, dynamically weighting training instances to enhance model accuracy on complex classification tasks ",
+                "text": "Hybridization with statistical machine learning frameworks has introduced boosting techniques to genetic programming, dynamically weighting training instances to enhance model accuracy on complex classification tasks.",
                 "citations": [
                   "22"
                 ]
               },
               {
-                "text": "Co-evolutionary paradigms, such as the co-evolving parasites approach, have been employed to prevent premature convergence by dynamically adapting the difficulty of evaluation targets ",
+                "text": "Co-evolutionary paradigms, such as the co-evolving parasites approach, have been employed to prevent premature convergence by dynamically adapting the difficulty of evaluation targets.",
                 "citations": [
                   "23"
                 ]
               },
               {
-                "text": "Finally, adaptive variation operators that modulate crossover and mutation probabilities in response to population diversity metrics have been shown to improve overall evolutionary performance ",
+                "text": "Finally, adaptive variation operators that modulate crossover and mutation probabilities in response to population diversity metrics have been shown to improve overall evolutionary performance.",
                 "citations": [
                   "23"
                 ]
               },
               {
-                "text": "Targeted investigations into overfitting phenomena have further guided the design of these advanced operators, ensuring that evolved solutions maintain robust predictive power on unseen data ",
+                "text": "Targeted investigations into overfitting phenomena have further guided the design of these advanced operators, ensuring that evolved solutions maintain robust predictive power on unseen data.",
                 "citations": [
                   "22"
                 ]
               },
               {
-                "text": "These architectural and operational refinements collectively address the scalability and efficiency challenges that historically constrained the field's exponential growth trajectory ",
+                "text": "These architectural and operational refinements collectively address the scalability and efficiency challenges that historically constrained the field's exponential growth trajectory.",
                 "citations": [
                   "7"
                 ]
