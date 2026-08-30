@@ -87,6 +87,9 @@ $ node dist/cli.js "examples/make a report on genetic programming_20260826_11153
   ⚠ 7 citation marker(s) without a matching source citation_key (stripped)
 ```
 
+`dist/` is not committed — after any source changes, run `npm run build`
+before invoking the CLI, or use the dev entry (`npm run dev`) instead.
+
 Errors are actionable, not stack traces (real output):
 
 ```
