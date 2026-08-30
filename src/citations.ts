@@ -175,12 +175,12 @@ export function hasVisibleContent(text: string): boolean {
 }
 
 /**
- * Render the superscript citation label + anchor for a set of 1-based
- * source positions. Sorted ascending, comma-joined: `[2,3]` or `[2]`.
+ * Render the inline citation label + anchor for a set of 1-based source
+ * positions. Sorted ascending, comma-joined: `[2,3]` or `[2]`.
  */
 export function citationSup(positions: readonly number[]): string {
   if (positions.length === 0) return "";
   const label = `[${[...positions].sort((a, b) => a - b).join(",")}]`;
   const href = `#src-${positions[0]}`;
-  return `<sup class="cite"><a href="${href}">${label}</a></sup>`;
+  return `<span class="cite"><a href="${href}">${label}</a></span>`;
 }

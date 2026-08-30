@@ -305,16 +305,12 @@ code {
 
 /* --- citations --- */
 
-sup.cite {
-  font-size: 7.5pt;
-  font-weight: 500;
-  line-height: 0;
-  vertical-align: super;
+.cite {
   margin-left: 1.5pt;
   white-space: nowrap;
 }
 
-sup.cite a {
+.cite a {
   color: var(--accent);
   text-decoration: none;
 }

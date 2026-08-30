@@ -115,7 +115,7 @@ test("marker-only span keeps its terminal period and glues to the prior sentence
   const { html } = prepare(f, { outPath: "out/unused.pdf" });
   assert.ok(
     html.includes(
-      'array of disciplines <sup class="cite"><a href="#src-7">[7,15]</a></sup>. Since its rise',
+      'array of disciplines <span class="cite"><a href="#src-7">[7,15]</a></span>. Since its rise',
     ),
     `expected "disciplines [7,15]. Since" (space, sup, period), got: ${html.match(/<p>[\s\S]*?<\/p>/)?.[0] ?? "(no <p>)"}`,
   );
@@ -157,11 +157,11 @@ test("cited span ending in a period renders as word [1,2]. Next", () => {
   // Order: last char, SPACE, sup, PERIOD, space, first char of next sentence.
   assert.ok(
     html.includes(
-      'underlying information <sup class="cite"><a href="#src-1">[1,2]</a></sup>. For an input matrix',
+      'underlying information <span class="cite"><a href="#src-1">[1,2]</a></span>. For an input matrix',
     ),
     `expected "information [1,2]. For" in the new order, got: ${p}`,
   );
-  assert.ok(!html.includes("information.<sup"), `sup must precede the period, got: ${p}`);
+  assert.ok(!html.includes("information.<span"), `citation must precede the period, got: ${p}`);
 });
 
 test("list item ending in a period renders as word [1]. per the citation convention", () => {
@@ -193,11 +193,11 @@ test("list item ending in a period renders as word [1]. per the citation convent
   const li = html.match(/<li>[\s\S]*?datasets[\s\S]*?<\/li>/)?.[0] ?? "(no item)";
   assert.ok(
     html.includes(
-      'CIFAR-10 datasets <sup class="cite"><a href="#src-1">[1]</a></sup>.</li>',
+      'CIFAR-10 datasets <span class="cite"><a href="#src-1">[1]</a></span>.</li>',
     ),
     `expected "datasets [1].</li>" (space, sup, period), got: ${li}`,
   );
-  assert.ok(!html.includes("datasets.<sup"), "sup must precede the period in list items");
+  assert.ok(!html.includes("datasets.<span"), "citation must precede the period in list items");
   assert.ok(html.includes("<li>Plain item without a period</li>"), "item without a mark unchanged");
 });
 
