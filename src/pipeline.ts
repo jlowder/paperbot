@@ -147,7 +147,7 @@ export function prepare(inputPath: string, opts: PipelineOptions): PreparedDocum
   return prepareContent(content, format, inputPath, opts);
 }
 
-function prepareContent(
+export function prepareContent(
   content: string,
   format: InputFormat,
   sourceLabel: string,

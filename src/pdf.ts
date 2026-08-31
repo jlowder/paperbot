@@ -9,6 +9,7 @@ import { readFileSync, statSync } from "node:fs";
 import { chromium, type Browser, type Page } from "playwright";
 import pdf from "pdf-parse";
 import type { PdfResult } from "pdf-parse";
+import { EXIT_RENDER } from "./pipeline.js";
 
 export const PAGE_FORMATS = ["letter", "a4", "legal", "a5", "tabloid"] as const;
 export type PageFormat = (typeof PAGE_FORMATS)[number];
@@ -81,30 +82,53 @@ export function chromiumAvailable(): boolean {
   }
 }
 
-async function renderPdfWithBrowser(browser: Browser, html: string, opts: PdfOptions): Promise<void> {
+/** Shared Chromium page.pdf layout options (file and buffer paths alike). */
+function pdfPageOptions(format: PageFormat): NonNullable<Parameters<Page["pdf"]>[0]> {
+  return {
+    format,
+    printBackground: true,
+    displayHeaderFooter: true,
+    preferCSSPageSize: false,
+    margin: {
+      top: "0.75in",
+      right: "0.7in",
+      bottom: "0.95in",
+      left: "0.7in",
+    },
+    headerTemplate: "<span></span>",
+    footerTemplate:
+      '<div style="font-size:8px;color:#999;width:100%;text-align:center"><span class="pageNumber"></span> / <span class="totalPages"></span></div>',
+  };
+}
+
+/**
+ * Render `html` in a fresh page and return the PDF bytes. With
+ * `outputPath`, writes via Playwright's `path` option and reads the file
+ * back (identical to the previous file-writing behavior); without it,
+ * Playwright returns the bytes directly (no file touched).
+ */
+async function renderPdfCore(
+  browser: Browser,
+  html: string,
+  format: PageFormat,
+  outputPath?: string,
+): Promise<Buffer> {
   const page: Page = await browser.newPage();
   try {
     await page.setContent(html, { waitUntil: "load" });
     await page.evaluate(() => document.fonts.ready);
-    await page.pdf({
-      path: opts.outputPath,
-      format: opts.format,
-      printBackground: true,
-      displayHeaderFooter: true,
-      preferCSSPageSize: false,
-      margin: {
-        top: "0.75in",
-        right: "0.7in",
-        bottom: "0.95in",
-        left: "0.7in",
-      },
-      headerTemplate: "<span></span>",
-      footerTemplate:
-        '<div style="font-size:8px;color:#999;width:100%;text-align:center"><span class="pageNumber"></span> / <span class="totalPages"></span></div>',
-    });
+    if (outputPath !== undefined) {
+      await page.pdf({ ...pdfPageOptions(format), path: outputPath });
+      return readFileSync(outputPath);
+    }
+    return await page.pdf({ ...pdfPageOptions(format) });
   } finally {
     await page.close().catch(() => {});
   }
+}
+
+async function renderPdfWithBrowser(browser: Browser, html: string, opts: PdfOptions): Promise<void> {
+  await renderPdfCore(browser, html, opts.format, opts.outputPath);
 }
 
 const normalizeWs = (s: string) => s.replace(/\s+/g, " ").trim();
@@ -248,24 +272,24 @@ export interface PdfValidationFail {
   attempts: number;
 }
 
-/** Validate a generated PDF. Returns the result; `ok: false` carries the error. */
-export async function validatePdf(
-  opts: PdfOptions,
+/**
+ * Validate raw PDF bytes (the content-based half of validatePdf).
+ *
+ * Same defenses as the file path: >10 KB, %PDF header, up to
+ * PDF_PARSE_MAX_ATTEMPTS parses with backoff, >= 1 page, and title
+ * containment in the extracted text unless skipTextCheck. The header check
+ * stays inside the attempt loop (mirroring the file path's per-re-read
+ * check) so a bad header reports attempts=1, exactly like before.
+ */
+export async function validatePdfBuffer(
+  buffer: Buffer,
+  opts: { expectedTitle: string; skipTextCheck?: boolean },
   deps: PdfValidateDeps = {},
 ): Promise<PdfValidationOk | PdfValidationFail> {
   const parse = deps.parse ?? realPdfParse;
 
-  let size: number;
-  try {
-    const st = statSync(opts.outputPath);
-    if (!st.isFile()) return { ok: false, attempts: 0, error: `output path is not a regular file: ${opts.outputPath}` };
-    size = st.size;
-  } catch {
-    return { ok: false, attempts: 0, error: `output file missing: ${opts.outputPath}` };
-  }
-
-  if (size < 10 * 1024) {
-    return { ok: false, attempts: 0, error: `output file suspiciously small (${size} bytes, expected > 10KB)` };
+  if (buffer.length < 10 * 1024) {
+    return { ok: false, attempts: 0, error: `output suspiciously small (${buffer.length} bytes, expected > 10KB)` };
   }
 
   let parsed: PdfResult | undefined;
@@ -273,14 +297,6 @@ export async function validatePdf(
   let attempts = 0;
   for (let attempt = 1; attempt <= PDF_PARSE_MAX_ATTEMPTS; attempt++) {
     attempts = attempt;
-    // Re-read the file on every attempt: a fresh buffer per parse.
-    let buffer: Buffer;
-    try {
-      buffer = readFileSync(opts.outputPath);
-    } catch (err) {
-      return { ok: false, attempts, error: `could not read output file: ${err instanceof Error ? err.message : String(err)}` };
-    }
-
     const header = buffer.subarray(0, 5).toString("latin1");
     if (!header.startsWith("%PDF")) {
       return { ok: false, attempts, error: `output does not start with %PDF (got "${header}")` };
@@ -324,6 +340,34 @@ export async function validatePdf(
   return { ok: true, pages: parsed.numpages, attempts };
 }
 
+/** Validate a generated PDF file. Returns the result; `ok: false` carries the error. */
+export async function validatePdf(
+  opts: PdfOptions,
+  deps: PdfValidateDeps = {},
+): Promise<PdfValidationOk | PdfValidationFail> {
+  let size: number;
+  try {
+    const st = statSync(opts.outputPath);
+    if (!st.isFile()) return { ok: false, attempts: 0, error: `output path is not a regular file: ${opts.outputPath}` };
+    size = st.size;
+  } catch {
+    return { ok: false, attempts: 0, error: `output file missing: ${opts.outputPath}` };
+  }
+
+  if (size < 10 * 1024) {
+    return { ok: false, attempts: 0, error: `output file suspiciously small (${size} bytes, expected > 10KB)` };
+  }
+
+  let buffer: Buffer;
+  try {
+    buffer = readFileSync(opts.outputPath);
+  } catch (err) {
+    return { ok: false, attempts: 0, error: `could not read output file: ${err instanceof Error ? err.message : String(err)}` };
+  }
+
+  return validatePdfBuffer(buffer, opts, deps);
+}
+
 /**
  * Render HTML to PDF in a fresh browser (opened and closed around the call)
  * and validate the result.
@@ -342,4 +386,38 @@ export async function htmlToPdf(html: string, opts: PdfOptions): Promise<PdfOutp
   }
   const sizeBytes = statSync(opts.outputPath).size;
   return { ok: true, pages: validation.pages, sizeBytes };
+}
+
+export interface PdfBufferOptions {
+  format: PageFormat;
+  expectedTitle: string;
+  skipTextCheck?: boolean;
+}
+
+/**
+ * Render HTML to PDF bytes (NO file written) and validate them.
+ *
+ * Pass a caller-owned `browser` to amortize launch cost across many
+ * conversions (e.g. an API server); when omitted, a browser is launched
+ * and closed around the call. Throws PaperbotError(EXIT_RENDER) when the
+ * bytes fail validation — callers wanting a result object should use
+ * htmlToPdf (file-based) instead.
+ */
+export async function htmlToPdfBuffer(
+  html: string,
+  opts: PdfBufferOptions,
+  browser?: Browser,
+): Promise<Buffer> {
+  const own = browser === undefined;
+  const b = browser ?? (await launchChromium());
+  try {
+    const buffer = await renderPdfCore(b, html, opts.format);
+    const validation = await validatePdfBuffer(buffer, opts);
+    if (!validation.ok) {
+      throw new PaperbotError(validation.error, EXIT_RENDER);
+    }
+    return buffer;
+  } finally {
+    if (own) await b.close().catch(() => {});
+  }
 }
