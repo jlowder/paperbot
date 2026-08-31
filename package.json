@@ -9,7 +9,8 @@
     ".": "./dist/pipeline.js"
   },
   "bin": {
-    "paperbot": "dist/cli.js"
+    "paperbot": "dist/cli.js",
+    "paperbot-server": "dist/start-server.js"
   },
   "engines": {
     "node": ">=20"
@@ -18,9 +19,12 @@
     "build": "tsc -p .",
     "test": "tsx --test test/*.test.ts",
     "dev": "tsx src/cli.ts",
+    "serve": "tsx src/start-server.ts",
+    "serve:prod": "node dist/start-server.js",
     "setup": "npm install && npx playwright install chromium"
   },
   "dependencies": {
+    "fastify": "^5.12.1",
     "katex": "^0.18.4",
     "marked": "^15.0.0",
     "pdf-parse": "^1.1.1",
