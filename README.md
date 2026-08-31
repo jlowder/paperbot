@@ -34,7 +34,8 @@ numbered reference list with working `[1]`-style citation back-links.
 ```
 
 `src/pipeline.ts` exposes `run()` / `prepare()` as a stable library API —
-the future API server can drive the same code path without shelling out.
+the bundled HTTP server (see below) drives the same in-process code path,
+and `htmlToPdfBuffer()` in `src/pdf.ts` returns PDF bytes for API use.
 (`prepare()` is the no-PDF entry point; both accept a file path or `-` for
 stdin.)
 
@@ -200,7 +201,7 @@ in `pdfgen.md`.
 npm test
 ```
 
-`node:test` + `tsx`, seven suites, 32 tests:
+`node:test` + `tsx`, ten suites, 69 tests:
 
 | suite | covers |
 | --- | --- |
@@ -211,6 +212,9 @@ npm test
 | `failures.test.ts` | CLI exit codes: missing file / bad JSON (line+col) / schema violations / bad `--format` (all five accepted) / two positionals / `--keep-html` space form / `--help` wins / unknown flag / `convert` alias |
 | `cli-fresh.test.ts` | spawns the **built** CLI as a child process: 1-page doc cold-start regression, empty stdin, markdown via stdin; skips cleanly without `dist/` (and without chromium for the render legs) |
 | `pdf.e2e.test.ts` | real Chromium → real PDF → pdf-parse text assertions; **skips cleanly when Chromium is absent** |
+| `math.test.ts` | `katexStylesheet()` (every font a data: URI), `renderMath()` fallback on bad TeX, `splitMath()` delimiter parsing, `joinSpans` spacing rules |
+| `blocks.test.ts` | callout span → paragraph grouping (lowercase start continues, marker-only glues, capital opens a new `<p>`) |
+| `server.test.ts` | HTTP API via `app.inject()`: all routes, wrapped/raw shapes, markdown content-types, 400/413/503 mapping, PDF-bytes leg (Chromium-gated) |
 
 ## Project layout
 
@@ -221,22 +225,36 @@ src/
   document.ts     zod schemas + normalizeDocument() (dirty-data guards)
   citations.ts    marker regex, CitationResolver, sup-link renderer
   markdown.ts     marked lexer -> DocumentModel
-  pdf.ts          Playwright launch, pdf options, pdf-parse validation
+  pdf.ts          Playwright launch, pdf options, pdf-parse validation,
+                  bytes-returning htmlToPdfBuffer()
+  openapi.ts      OpenAPI 3.1 document for the API server
+  server.ts       Fastify app: POST /render, GET /health / /openapi.json
+  start-server.ts HTTP entry point (PORT/HOST, signal handling)
   render/
     html.ts       self-contained document shell (title, summary, sections, refs)
     blocks.ts     per-block renderers + HTML escaping
     css.ts        embedded print stylesheet
+    math.ts       KaTeX: renderToString + inlined font data-URIs
 test/             node:test suites + fixtures
 examples/         the two real deep-research agent outputs
 out/              generated PDFs (gitignored)
 ```
 
-## Next phase: API server
+## API server
 
-Phase 2 serves the same pipeline over HTTP: `POST /reports` accepts JSON
-or markdown, runs `prepare()` + `htmlToPdf()` in-process, streams progress
-(parallel browser contexts, not process-per-request), and returns the PDF
-with `Content-Disposition`. The `pipeline.ts` API is shaped for exactly
-this: no global state, all I/O paths injected via options. (The stdin
-handling lives in the CLI-facing `prepare()` path; the API server will take
-request bodies directly and skip it.)
+The HTTP API ships as `paperbot-server` (Fastify, in-process, fully
+offline):
+
+```bash
+npm run serve            # dev (tsx)
+npm run serve:prod       # node dist/start-server.js  (PORT/HOST env)
+```
+
+`POST /render` accepts a report envelope — wrapped
+`{document | markdown, format, page_format, title, validate}` or raw —
+plus markdown via `text/plain` / `text/markdown` — and responds with PDF or
+HTML **bytes** (with `X-Paperbot-warnings`; PDF adds a slugified
+`Content-Disposition`). A shared Chromium renders all requests; nothing is
+written to disk. Also `GET /health`, `GET /`, `GET /openapi.json`.
+
+Full reference: [API.md](./API.md).
