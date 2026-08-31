@@ -13,7 +13,7 @@ import {
   type Span,
   type TableCell,
 } from "../document.js";
-import { citationSup } from "../citations.js";
+import { citationSup, CITATION_MARKER_RE } from "../citations.js";
 import { renderMath, splitMath, stripMathDelimiters } from "./math.js";
 
 /** Escape a string for safe use in an HTML text node. */
@@ -144,6 +144,26 @@ function joinSpans(spans: Span[], warnings: string[]): string {
   return out;
 }
 
+/**
+ * How a callout span joins the paragraph being built (callout case):
+ * `null` -> new <p>; `" "` -> append with one space; `""` -> append glued.
+ * A span whose trimmed text is only citation markers continues with no
+ * space (mirrors the paragraph marker-only glue rule); otherwise it
+ * continues only when its first remaining char is a Unicode lowercase
+ * letter — the producer splits sentences into spans mid-sentence, and the
+ * continuation span starts lowercase. Capitals/digits/symbols start a new
+ * <p>. (citation_note does NOT use this: its spans are deliberate separate
+ * source lines, one <p> each.)
+ */
+function continuesPrevious(text: string): " " | "" | null {
+  const rest = text
+    .trim()
+    .replace(new RegExp(`^(?:\\s*${CITATION_MARKER_RE.source})+`, "i"), "")
+    .trim();
+  if (rest === "") return "";
+  return /^\p{Ll}/u.test(rest) ? " " : null;
+}
+
 function renderListItem(item: ListItem, warnings: string[]): string {
   return `<li>${renderCitedText(item.text, item.sourcePositions, warnings)}</li>`;
 }
@@ -181,8 +201,24 @@ export function renderBlock(block: Block, opts: BlockRenderOptions = {}): string
     case "callout": {
       const warnings: string[] = [];
       const title = block.calloutTitle !== "" ? block.calloutTitle : "Note";
-      const body = block.spans
-        .map((s) => `<p>${renderSpan(s, warnings)}</p>`)
+      // The producer splits a sentence into spans ("...open problems" [41]
+      // + "and call for ..." [43]); a span that continues the previous one
+      // joins the last <p> instead of breaking the line mid-sentence.
+      const paras: string[] = [];
+      for (const s of block.spans) {
+        const rendered = renderSpan(s, warnings);
+        if (paras.length > 0) {
+          const sep = continuesPrevious(s.text);
+          if (sep !== null) {
+            paras[paras.length - 1] += sep + rendered;
+            continue;
+          }
+        }
+        paras.push(rendered);
+      }
+      const body = paras
+        .filter((p) => p !== "")
+        .map((p) => `<p>${p}</p>`)
         .join("");
       const html = `<div class="callout ${block.calloutType}"><span class="callout-title">${escapeHtml(
         title,
