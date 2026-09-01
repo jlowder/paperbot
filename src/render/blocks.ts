@@ -64,6 +64,12 @@ function renderCitedText(text: string, positions: readonly number[], warnings: s
   const sup = citationSup(positions);
   const segments = splitMath(raw);
 
+  // Empty / zero-width input (e.g. a cell whose text normalized to ""):
+  // splitMath yields zero segments, and the trailing-segment index below
+  // would read `undefined.kind`. Render empty: an empty cell stays an
+  // empty cell.
+  if (raw === "" || segments.length === 0) return "";
+
   if (segments.length === 1 && segments[0].kind === "text") {
     // No math markers: whole-text punct rule (unchanged legacy behavior).
     const m = raw.match(/^(.*?)([.!?]+)$/s);

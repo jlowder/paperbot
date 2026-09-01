@@ -64,3 +64,81 @@ test("callout marker-only span glues without a space", () => {
   assert.equal(paragraphs(html).length, 1, html);
   assert.match(html, /adjoint training\.\[W4\]/);
 });
+
+// ---------------------------------------------------------------------------
+// Empty / zero-width input in the shared renderCitedText path (cells,
+// list items, spans): splitMath("") yields zero segments, which used to
+// crash on the trailing-segment index. Empty input must render empty.
+// ---------------------------------------------------------------------------
+
+test("table cell with empty text renders as an empty cell, no throw", () => {
+  const block: Block = {
+    type: "comparison_table",
+    caption: "",
+    columns: ["Stage", "Classical unit"],
+    rows: [
+      [{ text: "Describe", sourcePositions: [] }, { text: "", sourcePositions: [] }],
+      [
+        { text: "", sourcePositions: [] },
+        { text: "Builds the gate list.", sourcePositions: [8] },
+      ],
+    ],
+  };
+  const html = renderBlock(block);
+  assert.ok(html.includes("<tr><td>Describe</td><td></td></tr>"), html);
+  assert.ok(
+    html.includes(
+      "<tr><td></td><td>Builds the gate list <span class=\"cite\"><a href=\"#src-8\">[8]</a></span>.</td></tr>",
+    ),
+    html,
+  );
+});
+
+test("table cell with whitespace-only text renders as an empty cell, no throw", () => {
+  const block: Block = {
+    type: "comparison_table",
+    caption: "",
+    columns: ["A"],
+    rows: [[{ text: "  \t  ", sourcePositions: [] }]],
+  };
+  assert.equal(
+    renderBlock(block),
+    '<table><thead><tr><th>A</th></tr></thead><tbody><tr><td></td></tr></tbody></table>',
+  );
+});
+
+test("paragraph span with only whitespace renders, no throw", () => {
+  const block: Block = {
+    type: "paragraph",
+    spans: [span("Hello world."), span("   ")],
+  };
+  const html = renderBlock(block);
+  assert.equal(paragraphs(html)[0], "Hello world.");
+});
+
+test("list item with whitespace-only text renders, no throw", () => {
+  const block: Block = {
+    type: "unordered_list",
+    items: [{ text: "   ", sourcePositions: [] }],
+  };
+  assert.equal(renderBlock(block), "<ul><li></li></ul>");
+});
+
+test("a normal table still renders byte-identical", () => {
+  const block: Block = {
+    type: "comparison_table",
+    caption: "",
+    columns: ["Stage", "Unit"],
+    rows: [
+      [{ text: "Describe", sourcePositions: [] }, { text: "Parser", sourcePositions: [] }],
+      [{ text: "Execute", sourcePositions: [] }, { text: "Runner", sourcePositions: [] }],
+    ],
+  };
+  assert.equal(
+    renderBlock(block),
+    '<table><thead><tr><th>Stage</th><th>Unit</th></tr></thead><tbody>' +
+      '<tr><td>Describe</td><td>Parser</td></tr>' +
+      '<tr><td>Execute</td><td>Runner</td></tr>' +
+      '</tbody></table>',
+  );
+});

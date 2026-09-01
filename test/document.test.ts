@@ -10,16 +10,59 @@ import { runCli, tempFile } from "./util.js";
 const hasChromium = chromiumAvailable();
 const noChromium = "chromium not installed (run: npx playwright install chromium)";
 
-function docWith(block: Record<string, unknown>): string {
+function docWith(block: Record<string, unknown>, sources: unknown[] = []): string {
   return JSON.stringify({
     schema_version: "1.0",
     report: {
       metadata: { title: "Callout Fixture" },
       sections: [{ heading: "Section", blocks: [block] }],
-      sources: [],
+      sources,
     },
   });
 }
+
+// Regression for the deep-research report crash: cells whose text normalizes
+// to empty (a lone em-dash has no letter/digit, so hasVisibleContent strips
+// it; a bare {} defaults to "") reached renderCitedText as "" ->
+// splitMath => [] -> `segments[-1].kind` TypeError. They must render as
+// empty cells through the full raw -> normalize -> render pipeline.
+test("table cells that normalize to empty ({} / lone em-dash) render without crashing", () => {
+  const f = tempFile(
+    "empty-cells.json",
+    docWith(
+      {
+        type: "comparison_table",
+        columns: ["Stage", "Classical unit", "Quantum unit"],
+        rows: [
+          [
+            { text: "Describe", citations: [] },
+            { text: "Builds the gate list", citations: [] },
+            {},
+          ],
+          [
+            { text: "Execute", citations: [] },
+            { text: "\u2014", citations: [] },
+            { text: "Runs the circuit [W6]", citations: [] },
+          ],
+        ],
+      },
+      [{ citation_key: "w6", title: "QML survey" }],
+    ),
+  );
+  const { html } = prepare(f, { outPath: "out/unused.pdf" });
+  const tds = [...html.matchAll(/<td>([\s\S]*?)<\/td>/g)].map((m) => m[1]);
+  assert.equal(tds.length, 6, html);
+  assert.deepEqual(
+    tds.map((t) => (t === "" ? "\u0000" : t)).slice(0, 3),
+    ["Describe", "Builds the gate list", "\u0000"],
+    html,
+  );
+  assert.deepEqual(
+    tds.map((t) => (t === "" ? "\u0000" : t)).slice(3),
+    ["Execute", "\u0000", 'Runs the circuit<span class="cite"><a href="#src-1">[1]</a></span>'],
+    html,
+  );
+});
 
 test("unknown callout_type -> exit 1 with actionable schema error naming the value", async () => {
   const f = tempFile(
