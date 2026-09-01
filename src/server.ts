@@ -76,7 +76,10 @@ export async function createServer(opts: ServerOptions = {}): Promise<FastifyIns
   });
 
   // ---- CORS (permissive: this is an internal rendering service) ----------
-  app.addHook("onResponse", (_req, reply) => {
+  // onSend runs before the response flushes, so these reach the wire. Do NOT
+  // use onResponse: it fires on the socket 'finish' event, AFTER headers are
+  // already sent, so reply.header() there silently no-ops.
+  app.addHook("onSend", async (_req, reply) => {
     reply.header("access-control-allow-origin", "*");
     reply.header("access-control-allow-methods", "GET, POST, OPTIONS");
     reply.header("access-control-allow-headers", "content-type");

@@ -42,6 +42,25 @@ describe("API server (pdf disabled)", () => {
     assert.equal(body.docs, "API.md");
   });
 
+  test("OPTIONS preflight -> 204 with CORS allow headers", async () => {
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/health",
+      headers: { origin: "http://x", "access-control-request-method": "GET" },
+    });
+    assert.equal(res.statusCode, 204);
+    assert.equal(res.headers["access-control-allow-origin"], "*");
+    assert.equal(res.headers["access-control-allow-methods"], "GET, POST, OPTIONS");
+    assert.equal(res.headers["access-control-allow-headers"], "content-type");
+  });
+
+  test("GET /health response carries access-control-allow-origin", async () => {
+    const res = await app.inject({ method: "GET", url: "/health" });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.headers["access-control-allow-origin"], "*");
+    assert.equal(res.headers["access-control-allow-methods"], "GET, POST, OPTIONS");
+  });
+
   test("GET /openapi.json serves a parseable spec with /render", async () => {
     const res = await app.inject({ method: "GET", url: "/openapi.json" });
     assert.equal(res.statusCode, 200);
