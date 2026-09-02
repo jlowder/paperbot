@@ -13,7 +13,7 @@ npm run build
 npm run serve:prod       # node dist/start-server.js
 ```
 
-Environment: `PORT` (default `3000`), `HOST` (default `0.0.0.0`).
+Environment: `PORT` (default `8322`), `HOST` (default `0.0.0.0`).
 
 PDF rendering needs Playwright Chromium (`npx playwright install chromium`).
 If it is missing at startup the service still starts — `/health` reports
@@ -166,20 +166,20 @@ Non-fatal issues still produce a 200 body; the count is in
 ```bash
 # PDF from a report envelope (raw shape)
 curl -sS -o report.pdf -H 'content-type: application/json' \
-  -d @report.json 'http://localhost:3000/render?format=pdf'
+  -d @report.json 'http://localhost:8322/render?format=pdf'
 
 # A4 HTML with a title override
 curl -sS -o report.html -H 'content-type: application/json' \
-  -d @report.json 'http://localhost:3000/render?format=html&page_format=a4&title=My%20Title'
+  -d @report.json 'http://localhost:8322/render?format=html&page_format=a4&title=My%20Title'
 
 # Markdown
 curl -sS -o report.html -H 'content-type: text/markdown' \
-  -d @notes.md 'http://localhost:3000/render?format=html'
+  -d @notes.md 'http://localhost:8322/render?format=html'
 
 # Wrapped shape
 curl -sS -o report.pdf -H 'content-type: application/json' \
   -d '{"document": {"report": {"metadata": {"title": "T"}, "sections": []}}, "format": "pdf"}' \
-  http://localhost:3000/render
+  http://localhost:8322/render
 ```
 
 ## Programmatic use (skip HTTP)

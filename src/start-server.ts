@@ -1,7 +1,7 @@
 /**
  * Paperbot API server entry point: `paperbot-server` / `npm run serve:prod`.
  *
- *   PORT=3000 HOST=0.0.0.0 node dist/start-server.js
+ *   PORT=8322 HOST=0.0.0.0 node dist/start-server.js
  *
  * Renders documents to PDF/HTML bytes in memory; nothing is written to disk.
  */
@@ -9,7 +9,7 @@ import { createServer } from "./server.js";
 
 const app = await createServer();
 
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(process.env.PORT ?? 8322);
 const host = process.env.HOST ?? "0.0.0.0";
 
 await app.listen({ port, host });
