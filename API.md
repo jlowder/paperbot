@@ -1,6 +1,6 @@
 # Paperbot API
 
-HTTP service: POST a research document (JSON or Markdown) and receive a
+HTTP service: POST a structured document (JSON or Markdown) and receive a
 polished **PDF** or **HTML** as the response body. Everything is in-memory —
 the service never writes files; the response *is* the deliverable. A single
 Chromium instance is shared across requests and launched at startup.
@@ -8,9 +8,8 @@ Chromium instance is shared across requests and launched at startup.
 ## Running
 
 ```bash
+npm run build            # first time only
 npm run serve            # dev (tsx, runs source)
-npm run build
-npm run serve:prod       # node dist/start-server.js
 ```
 
 Environment: `PORT` (default `8322`), `HOST` (default `0.0.0.0`).

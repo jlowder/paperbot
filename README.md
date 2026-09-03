@@ -1,43 +1,8 @@
 # paperbot
 
-Converts structured research documents into polished, print-quality PDF reports.
+Paperbot is a service that converts documents formatted as structured JSON (eg., the output of multi-agent-rag-researcher) into polished **PDF** or **HTML**.
 
-Paperbot takes the JSON artifacts that LLM research agents emit (the `examples/`
-in this repo are real ones), plus plain markdown, and turns them into
-10–30-page client-ready PDFs: cover title area, executive summary panel,
-sectioned body with zebra-striped comparison tables, tinted callouts, and a
-numbered reference list with working `[1]`-style citation back-links.
-
-## How it works
-
-```
-┌────────────────────┐    ┌─────────┐    ┌────────┐    ┌──────────────┐
-│  input file        │    │  parse  │    │  zod   │    │  normalize   │
-│  *.json (schema)   ├────┤  JSON   ├────┤ valid. ├────┤ doc model +  │
-│  *.md  (marked)    │    │  / marked│   │  shape │    │ citations    │
-└────────────────────┘    └─────────┘    └────────┘    └──────┬───────┘
-                                                              │
-        ┌─────────────────────────────────────────────────────┘
-        ▼
-┌────────────────────┐    ┌──────────────────────────────────────────────┐
-│  self-contained    │    │  Playwright Chromium                        │
-│  HTML + embedded   ├────┤   page.setContent(html)                     │
-│  print CSS         │    │   await document.fonts.ready                 │
-└────────────────────┘    │   page.pdf(margins, footer, format)          │
-                          └──────────────────────┬───────────────────────┘
-                                                 ▼
-                          ┌──────────────────────────────────────────────┐
-                          │  validate (pdf-parse, retried up to 5×):    │
-                          │  file exists, >10 KB, %PDF header, ≥1 page,  │
-                          │  title in extracted text                    │
-                          └──────────────────────────────────────────────┘
-```
-
-`src/pipeline.ts` exposes `run()` / `prepare()` as a stable library API —
-the bundled HTTP server (see below) drives the same in-process code path,
-and `htmlToPdfBuffer()` in `src/pdf.ts` returns PDF bytes for API use.
-(`prepare()` is the no-PDF entry point; both accept a file path or `-` for
-stdin.)
+This is accessible as a CLI tool and as an HTTP service.
 
 ## Install
 
@@ -51,13 +16,14 @@ Requires Node ≥ 20 (uses the built-in test runner).
 
 ## CLI
 
+```bash
+node dist/cli.js <input> [options]
 ```
-paperbot [convert] <input> [options]
 
+```
 Input (exactly one):
   <input>                .json (structured report) or .md (markdown)
   -                      read the document from stdin (JSON or markdown, sniffed)
-  "convert"              optional no-op subcommand (first argument only)
 
 Options:
   -o, --out <path>       output PDF file (default: out/<input-basename>.pdf)
@@ -82,26 +48,11 @@ command).
 Example:
 
 ```bash
-$ node dist/cli.js "examples/make a report on genetic programming_20260826_111539.json"
-✓ Wrote out/make a report on genetic programming_20260826_111539.pdf, 9 pages, 2 warnings
-  ⚠ 36 unresolvable citation references (numeric index out of range for 18 sources)
-  ⚠ 7 citation marker(s) without a matching source citation_key (stripped)
+$ node dist/cli.js "examples/genetic-programming_20260826_111539.json"
+✓ Wrote out/genetic-programming_20260826_111539.pdf, 9 pages, 2 warnings
 ```
 
-`dist/` is not committed — after any source changes, run `npm run build`
-before invoking the CLI, or use the dev entry (`npm run dev`) instead.
-
-Errors are actionable, not stack traces (real output):
-
-```
-✗ invalid JSON (near line 2, column 27) (approximate): Unexpected token '}', ...
-✗ document validation failed:
-  - report.metadata.title: Required
-  - report.sections.0.blocks.0.spans: Expected array, received string
-✗ no data on stdin (pipe a JSON or markdown document, e.g. `cat doc.md | paperbot -`)
-```
-
-Markdown also works from a pipe: `cat report.md | paperbot - --out out/report.pdf`.
+Markdown also works from a pipe: `cat report.md | node dist/cli.js - --out out/report.pdf`.
 
 ## Input format
 
@@ -181,74 +132,19 @@ with next block). Six callout variants, each with its own color:
 (indigo), `key_insight` (violet). Design language follows the reference spec
 in `pdfgen.md`.
 
-## Known tech debt
-
-- `pdf-parse@1.1.4` vendors pdf.js 1.10.100 (2018), whose fake-worker path
-  (LoopbackPort clone `new value.constructor(value)` + `Stream.makeSubStream`
-  re-deriving from `this.bytes.buffer`) mis-reads any input whose underlying
-  ArrayBuffer has a non-zero byteOffset — i.e. Node's pooled Buffers for
-  sub-64 KB files — surfacing as "bad XRef entry" / "Command token too long"
-  on perfectly valid small PDFs. The shipped fix (`toPdfParseInput()` in
-  `src/pdf.ts`) normalizes parser input to a dedicated, offset-0 plain
-  Uint8Array (zero-copy when the input already is one). A one-time 321-byte
-  pre-warm prime parse and the 5-attempt retry loop (re-reading the file,
-  50 ms backoff) are retained as defense-in-depth. Follow-up: consider
-  `pdfjs-dist`.
-
 ## Tests
 
 ```bash
 npm test
 ```
 
-`node:test` + `tsx`, ten suites, 69 tests:
-
-| suite | covers |
-| --- | --- |
-| `examples.test.ts` | both real example JSONs end-to-end through `prepare()`: citation counts, no residual markers, references `<li>` count, table rows, all section headings, warning behavior |
-| `unicode.test.ts` | the full pdfgen.md test string (curly quotes, em dash, NBSP, Greek, math, CJK, Arabic, Devanagari, emoji) + HTML-injection escaping |
-| `markdown.test.ts` | fixture round-trip: titles, exec summary, H3 sub-headings, lists, tables, code, callouts, page breaks; raw-HTML dropping with warning |
-| `document.test.ts` | strict callout enum (unknown → exit 1 naming the value; `key_insight` renders with its own style), figure warnings |
-| `failures.test.ts` | CLI exit codes: missing file / bad JSON (line+col) / schema violations / bad `--format` (all five accepted) / two positionals / `--keep-html` space form / `--help` wins / unknown flag / `convert` alias |
-| `cli-fresh.test.ts` | spawns the **built** CLI as a child process: 1-page doc cold-start regression, empty stdin, markdown via stdin; skips cleanly without `dist/` (and without chromium for the render legs) |
-| `pdf.e2e.test.ts` | real Chromium → real PDF → pdf-parse text assertions; **skips cleanly when Chromium is absent** |
-| `math.test.ts` | `katexStylesheet()` (every font a data: URI), `renderMath()` fallback on bad TeX, `splitMath()` delimiter parsing, `joinSpans` spacing rules |
-| `blocks.test.ts` | callout span → paragraph grouping (lowercase start continues, marker-only glues, capital opens a new `<p>`) |
-| `server.test.ts` | HTTP API via `app.inject()`: all routes, wrapped/raw shapes, markdown content-types, 400/413/503 mapping, PDF-bytes leg (Chromium-gated) |
-
-## Project layout
-
-```
-src/
-  cli.ts          arg parsing (injectable streams, testable), exit codes
-  pipeline.ts     run() / prepare() library API, format detection, error shaping
-  document.ts     zod schemas + normalizeDocument() (dirty-data guards)
-  citations.ts    marker regex, CitationResolver, sup-link renderer
-  markdown.ts     marked lexer -> DocumentModel
-  pdf.ts          Playwright launch, pdf options, pdf-parse validation,
-                  bytes-returning htmlToPdfBuffer()
-  openapi.ts      OpenAPI 3.1 document for the API server
-  server.ts       Fastify app: POST /render, GET /health / /openapi.json
-  start-server.ts HTTP entry point (PORT/HOST, signal handling)
-  render/
-    html.ts       self-contained document shell (title, summary, sections, refs)
-    blocks.ts     per-block renderers + HTML escaping
-    css.ts        embedded print stylesheet
-    math.ts       KaTeX: renderToString + inlined font data-URIs
-test/             node:test suites + fixtures
-examples/         the two real deep-research agent outputs
-out/              generated PDFs (gitignored)
-```
-
 ## API server
-
-The HTTP API ships as `paperbot-server` (Fastify, in-process, fully
-offline):
 
 ```bash
 npm run serve            # dev (tsx)
-npm run serve:prod       # node dist/start-server.js  (PORT/HOST env)
 ```
+
+Environment: `PORT` (default `8322`), `HOST` (default `0.0.0.0`).
 
 `POST /render` accepts a report envelope — wrapped
 `{document | markdown, format, page_format, title, validate}` or raw —
