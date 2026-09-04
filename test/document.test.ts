@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromiumAvailable } from "../src/pdf.js";
 import { prepare } from "../src/pipeline.js";
+import { normalizeDocument, type RawDocument } from "../src/document.js";
 import { runCli, tempFile } from "./util.js";
 
 const hasChromium = chromiumAvailable();
@@ -362,4 +363,106 @@ test("figure with an unsafe url and no caption -> render-side warning surfaces",
   } finally {
     rmSync(out, { force: true });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Ragged table rows + malformed raw entries (the hilbert-space report crash:
+// a 3-column table whose rows carry only 2 cells -> row[i] === undefined ->
+// `raw.text` on undefined in resolveCitable). Raggedness passes the schema
+// (no width constraint) and must degrade to empty cells, never a crash.
+// ---------------------------------------------------------------------------
+
+test("ragged table rows (fewer cells than columns) render as empty cells", () => {
+  const f = tempFile(
+    "ragged-table.json",
+    docWith(
+      {
+        type: "comparison_table",
+        caption: "Tensor network geometries",
+        columns: ["Property", "General MPS/PEPS", "MERA"],
+        rows: [
+          ["Dimension", "2D / 3D tensor train"],
+          ["Bond dim", "Shared across bonds"],
+          ["Depth", "Proportional to system size"],
+          ["Use", "Ground states, time evolution"],
+        ],
+      },
+      [],
+    ),
+  );
+  const { html } = prepare(f, { outPath: "out/unused.pdf" });
+  const rows = [...html.matchAll(/<tr>([\s\S]*?)<\/tr>/g)];
+  // header (3 th) + 4 body rows
+  assert.equal(rows.length, 5, html);
+  assert.match(rows[0][1], /<th>Property<\/th>/);
+  assert.match(rows[0][1], /<th>MERA<\/th>/);
+  for (const [, body] of rows.slice(1)) {
+    const tds = body.match(/<td>/g) ?? [];
+    assert.equal(tds.length, 3, `expected 3 cells, got ${tds.length}: ${body}`);
+    // the missing third cell renders as an empty <td></td>
+    assert.match(body, /<td><\/td>$/);
+  }
+  rmSync(f, { force: true });
+});
+
+test("normalizeDocument survives malformed raw entries (unvalidated input)", () => {
+  // Direct normalizeDocument callers (API consumers, future code) bypass the
+  // schema: every malformed shape must degrade, not throw.
+  const raw = {
+    schema_version: "1.0",
+    report: {
+      // metadata entirely missing
+      executive_summary: ["Real summary.", 42, null],
+      sections: [
+        {
+          heading: "Section",
+          blocks: [
+            // null span entry + null text/citations fields
+            { type: "paragraph", text: null, citations: null, spans: [null, { text: "Kept sentence [1]", citations: null }] },
+            // explicit null cell + short row
+            { type: "comparison_table", columns: ["A", "B"], rows: [["x", null], ["only-one"]] },
+            // null list item + non-string text
+            { type: "ordered_list", items: [null, { text: null, citations: null }, { text: "Item kept", citations: [] }] },
+            // heading with null text -> dropped, not crash
+            { type: "heading", text: null, level: 2 },
+            // code/equation with missing text -> dropped
+            { type: "code_block" },
+            { type: "equation", text: null },
+            // unknown type with null text -> dropped
+            { type: "mystery_block", text: null },
+          ],
+        },
+      ],
+      sources: [
+        { citation_key: "s1", title: "Real source" },
+        { citation_key: "s2" }, // title missing
+      ],
+    },
+  } as unknown as RawDocument;
+
+  const { model, warnings } = normalizeDocument(raw);
+  const m = model as {
+    metadata: { title: string };
+    executiveSummary: string[];
+    sections: { heading: string; blocks: { type: string }[] }[];
+    sources: { title: string; citationKey: string }[];
+  };
+  assert.equal(m.metadata.title, ""); // no metadata -> empty, no crash
+  assert.deepEqual(m.executiveSummary, ["Real summary."]); // non-strings dropped
+  assert.equal(m.sources.length, 2);
+  assert.equal(m.sources[1].title, ""); // missing title -> ""
+
+  const blocks = m.sections[0].blocks;
+  const paragraph = blocks.find((b) => b.type === "paragraph");
+  assert.ok(paragraph, "paragraph with one good span survives");
+  const table = blocks.find((b) => b.type === "comparison_table");
+  assert.ok(table, "ragged/null-cell table survives");
+  const list = blocks.find((b) => b.type === "ordered_list");
+  assert.ok(list, "list with one good item survives");
+  assert.ok(!blocks.some((b) => b.type === "heading"), "null-text heading dropped");
+  assert.ok(!blocks.some((b) => b.type === "code_block"), "empty code block dropped");
+  assert.ok(!blocks.some((b) => b.type === "equation"), "null-text equation dropped");
+  assert.ok(!blocks.some((b) => String(b.type).startsWith("unknown")), "null-text unknown block dropped");
+  // The only warning: the unknown-type branch deliberately records one.
+  assert.deepEqual(warnings, ['unknown block type "mystery_block" skipped']);
 });

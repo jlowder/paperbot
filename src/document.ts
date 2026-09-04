@@ -296,20 +296,30 @@ function normalizeIssued(value: unknown): string {
 }
 
 function normalizeSource(raw: RawSource, position: number): Source {
-  const author = Array.isArray(raw.author) ? raw.author.filter((a) => a !== "").join(", ") : raw.author;
+  // Raw producer fields are unvalidated at runtime (the zod schema is
+  // type-only): read every string field through str() so a null/number
+  // value degrades to "" instead of crashing a downstream .trim().
+  const author = Array.isArray(raw.author)
+    ? raw.author.filter((a) => a !== "").join(", ")
+    : str(raw.author);
   return {
     position,
-    id: raw.id ?? "",
-    type: raw.type ?? "",
-    title: raw.title ?? "",
-    author: author ?? "",
+    id: str(raw.id),
+    type: str(raw.type),
+    title: str(raw.title),
+    author: str(author),
     issued: normalizeIssued(raw.issued),
-    url: (raw.URL ?? "").trim() !== "" ? (raw.URL ?? "") : raw.url ?? "",
-    publisher: raw.publisher ?? "",
-    doi: (raw.DOI ?? "").trim() !== "" ? (raw.DOI ?? "") : raw.doi ?? "",
-    citationKey: raw.citation_key ?? "",
-    accessed: raw.accessed ?? "",
+    url: str(raw.URL).trim() !== "" ? str(raw.URL) : str(raw.url),
+    publisher: str(raw.publisher),
+    doi: str(raw.DOI).trim() !== "" ? str(raw.DOI) : str(raw.doi),
+    citationKey: str(raw.citation_key),
+    accessed: str(raw.accessed),
   };
+}
+
+/** Safe string read for raw producer fields (the schema is type-only). */
+function str(v: unknown): string {
+  return typeof v === "string" ? v : "";
 }
 
 /** Terminal sentence punctuation: `.`, `!`, `?`, `…`. */
@@ -321,10 +331,18 @@ const TERMINAL_PUNCT_RE = /[.!?\u2026]/u;
  */
 function resolveCitable(
   resolver: CitationResolver,
-  raw: RawCitable,
+  raw: RawCitable | null | undefined,
   kind: "span" | "cell" | "item",
 ): { text: string; sourcePositions: number[] } | null {
-  const res = resolver.resolve(raw.text, raw.citations);
+  // Malformed producer entries (null/undefined, non-string text, or a missing
+  // citations list) must never crash normalization: a ragged table row leaves
+  // row[i] === undefined, and such a cell degrades to an EMPTY cell (kept —
+  // an empty cell is a legitimate cell) while a span/item is dropped.
+  if (raw == null || typeof raw.text !== "string") {
+    return kind === "cell" ? { text: "", sourcePositions: [] } : null;
+  }
+  const citations = Array.isArray(raw.citations) ? raw.citations : [];
+  const res = resolver.resolve(raw.text, citations);
   const text = res.text;
   if (kind === "cell") {
     // Empty cell text is fine for cells: keep the cell, drop its sup.
@@ -348,7 +366,7 @@ function normalizeBlock(
 ): Block | null {
   switch (raw.type) {
     case "heading": {
-      const text = raw.text.trim();
+      const text = str(raw.text).trim();
       if (text === "") return null;
       const level = raw.level === 2 ? 2 : 3;
       return { type: "heading", text, level };
@@ -359,13 +377,17 @@ function normalizeBlock(
     case "callout":
     case "source_list":
     case "appendix": {
-      // source_list / appendix are treated as paragraphs.
+      // source_list / appendix are treated as paragraphs. Raw text/citations/
+      // spans are unvalidated: sanitize so a null field or a null span entry
+      // degrades instead of crashing.
       const type = raw.type === "source_list" || raw.type === "appendix" ? "paragraph" : raw.type;
+      const rawText = str(raw.text);
+      const rawCitations = Array.isArray(raw.citations) ? raw.citations : [];
       const rawSpans: RawCitable[] =
-        raw.spans.length > 0
+        Array.isArray(raw.spans) && raw.spans.length > 0
           ? raw.spans
-          : raw.text.trim() !== ""
-            ? [{ text: raw.text, citations: raw.citations }]
+          : rawText.trim() !== ""
+            ? [{ text: rawText, citations: rawCitations }]
             : [];
       const spans = rawSpans
         .map((s) => resolveCitable(resolver, s, "span"))
@@ -375,8 +397,8 @@ function normalizeBlock(
         return {
           type: "callout",
           spans,
-          calloutType: raw.callout_type,
-          calloutTitle: raw.callout_title.trim(),
+          calloutType: raw.callout_type ?? "note",
+          calloutTitle: str(raw.callout_title).trim(),
         };
       }
       if (type === "quote") return { type: "quote", spans };
@@ -384,30 +406,44 @@ function normalizeBlock(
     }
 
     case "comparison_table": {
-      const hasColumns = raw.columns.length > 0;
-      const hasRows = raw.rows.length > 0;
+      const columns = Array.isArray(raw.columns) ? raw.columns : [];
+      const rows = Array.isArray(raw.rows) ? raw.rows : [];
+      const hasColumns = columns.length > 0;
+      const hasRows = rows.length > 0;
       if (!hasColumns && !hasRows) return null;
-      const width = Math.max(raw.columns.length, ...raw.rows.map((r) => r.length), 0);
-      const cells: TableCell[][] = raw.rows.map((row) =>
-        Array.from({ length: width }, (_, i) => {
+      const width = Math.max(
+        columns.length,
+        ...rows.map((r) => (Array.isArray(r) ? r.length : 0)),
+        0,
+      );
+      const cells: TableCell[][] = rows.map((rawRow) => {
+        const row = Array.isArray(rawRow) ? rawRow : [];
+        return Array.from({ length: width }, (_, i) => {
           const cell = row[i];
+          // Ragged rows (fewer cells than the table width) leave row[i]
+          // undefined: pad with an empty cell instead of crashing.
           const rawCell: RawCitable =
-            typeof cell === "string" ? { text: cell, citations: [] } : cell;
+            typeof cell === "string"
+              ? { text: cell, citations: [] }
+              : cell != null
+                ? cell
+                : { text: "", citations: [] };
           const res = resolveCitable(resolver, rawCell, "cell");
           return { text: res?.text ?? "", sourcePositions: res?.sourcePositions ?? [] };
-        }),
-      );
+        });
+      });
       return {
         type: "comparison_table",
-        caption: raw.caption.trim(),
-        columns: raw.columns,
+        caption: str(raw.caption).trim(),
+        columns,
         rows: cells,
       };
     }
 
     case "ordered_list":
     case "unordered_list": {
-      const items = raw.items
+      const rawItems = Array.isArray(raw.items) ? raw.items : [];
+      const items = rawItems
         .map((it) => resolveCitable(resolver, it, "item"))
         .filter((it): it is NonNullable<typeof it> => it !== null);
       if (items.length === 0) return null;
@@ -418,22 +454,24 @@ function normalizeBlock(
     }
 
     case "code_block": {
-      if (raw.text.trim() === "") return null;
-      return { type: "code_block", text: raw.text, language: raw.language.trim() };
+      const text = str(raw.text).trim();
+      if (text === "") return null;
+      return { type: "code_block", text, language: str(raw.language).trim() };
     }
 
     case "figure": {
       const url = raw.url !== undefined && raw.url !== "" ? raw.url : raw.src ?? "";
-      if ((raw.caption ?? "").trim() === "" && url === "") {
+      if (str(raw.caption).trim() === "" && url === "") {
         warnings.push("figure with no url or caption skipped");
         return null;
       }
-      return { type: "figure", caption: (raw.caption ?? "").trim(), url };
+      return { type: "figure", caption: str(raw.caption).trim(), url };
     }
 
     case "equation": {
-      if (raw.text.trim() === "") return null;
-      return { type: "equation", text: raw.text.trim(), language: raw.language.trim() };
+      const text = str(raw.text).trim();
+      if (text === "") return null;
+      return { type: "equation", text, language: str(raw.language).trim() };
     }
 
     case "page_break":
@@ -444,26 +482,30 @@ function normalizeBlock(
       // (W-references are deliberate prose, not bracket markers). Keep the
       // text verbatim (trimmed) — no marker stripping, no citation
       // resolution, no sourcePositions.
+      const rawText = str(raw.text);
       const rawSpans: RawCitable[] =
-        raw.spans.length > 0
+        Array.isArray(raw.spans) && raw.spans.length > 0
           ? raw.spans
-          : raw.text.trim() !== ""
-            ? [{ text: raw.text, citations: [] }]
+          : rawText.trim() !== ""
+            ? [{ text: rawText, citations: [] }]
             : [];
       const spans = rawSpans
+        .filter((s) => s != null && typeof s.text === "string")
         .map((s) => s.text.trim())
         .filter((t) => hasVisibleContent(t))
         .map((t) => ({ text: t, sourcePositions: [] as number[] }));
       if (spans.length === 0) return null;
-      return { type: "citation_note", spans, calloutTitle: raw.callout_title.trim() };
+      return { type: "citation_note", spans, calloutTitle: str(raw.callout_title).trim() };
     }
 
     default: {
       // Unknown type: keep the block, render its text (if any) as a
       // paragraph, and record a warning.
       warnings.push(`unknown block type "${raw.type}" skipped`);
-      if (raw.text.trim() === "") return null;
-      const res = resolver.resolve(raw.text, raw.citations);
+      const text = str(raw.text);
+      if (text.trim() === "") return null;
+      const citations = Array.isArray(raw.citations) ? raw.citations : [];
+      const res = resolver.resolve(text, citations);
       if (!hasVisibleContent(res.text)) return null;
       return { type: `unknown:${raw.type}` as const, text: res.text };
     }
@@ -478,17 +520,20 @@ export function normalizeDocument(
   const report = raw.report;
 
   const titleOverride = opts.title?.trim();
+  // metadata itself may be absent (unvalidated raw input): read every field
+  // through str() so the document degrades to empty metadata, not a crash.
+  const meta = (report.metadata ?? {}) as Record<string, unknown>;
   const metadata: DocumentMetadata = {
     title:
       titleOverride !== undefined && titleOverride !== ""
         ? titleOverride
-        : report.metadata.title.trim(),
-    subtitle: (report.metadata.subtitle ?? "").trim(),
-    query: (report.metadata.query ?? "").trim(),
-    sessionId: (report.metadata.session_id ?? "").trim(),
-    generatedAt: (report.metadata.generated_at ?? "").trim(),
-    author: (report.metadata.author ?? "").trim(),
-    reportType: (report.metadata.report_type ?? "").trim(),
+        : str(meta.title).trim(),
+    subtitle: str(meta.subtitle).trim(),
+    query: str(meta.query).trim(),
+    sessionId: str(meta.session_id).trim(),
+    generatedAt: str(meta.generated_at).trim(),
+    author: str(meta.author).trim(),
+    reportType: str(meta.report_type).trim(),
   };
 
   const resolver = new CitationResolver(
@@ -501,7 +546,7 @@ export function normalizeDocument(
   const sources: Source[] = (report.sources ?? []).map((s, i) => normalizeSource(s, i + 1));
 
   const executiveSummary = (report.executive_summary ?? [])
-    .map((s) => s.trim())
+    .map((s) => (typeof s === "string" ? s.trim() : ""))
     .filter((s) => s !== "");
 
   const sections: Section[] = (report.sections ?? []).map((sec) => {
