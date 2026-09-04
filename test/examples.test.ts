@@ -16,7 +16,16 @@ function count(pattern: RegExp, s: string): number {
   return m ? m.length : 0;
 }
 
-test("DJ example (25 sources, spaces in filename) parses, validates, renders", () => {
+test(
+  "DJ example (25 sources, spaces in filename) parses, validates, renders",
+  {
+    // examples/ was removed for the public release; skip gracefully when the
+    // fixture is absent, run normally if it ever returns.
+    skip: !existsSync(DJ_EXAMPLE)
+      ? "example fixture absent (examples/ removed for public release)"
+      : false,
+  },
+  () => {
   const raw = loadExample(DJ_EXAMPLE);
   assert.equal(raw.report.sources?.length, 25);
 
@@ -71,7 +80,14 @@ test("DJ example (25 sources, spaces in filename) parses, validates, renders", (
   assert.ok(!/src="http/.test(html), "no external script/img resources allowed");
 });
 
-test("GP example (18 sources, dirty citations) builds with the 36-ref warning", () => {
+test(
+  "GP example (18 sources, dirty citations) builds with the 36-ref warning",
+  {
+    skip: !existsSync(GP_EXAMPLE)
+      ? "example fixture absent (examples/ removed for public release)"
+      : false,
+  },
+  () => {
   const raw = loadExample(GP_EXAMPLE);
   assert.equal(raw.report.sources?.length, 18);
 

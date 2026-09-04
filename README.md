@@ -48,8 +48,8 @@ command).
 Example:
 
 ```bash
-$ node dist/cli.js "examples/genetic-programming_20260826_111539.json"
-✓ Wrote out/genetic-programming_20260826_111539.pdf, 9 pages, 2 warnings
+$ node dist/cli.js "my_report_20260101_120000.json"
+✓ Wrote out/my_report_20260101_120000.pdf, 9 pages, 2 warnings
 ```
 
 Markdown also works from a pipe: `cat report.md | node dist/cli.js - --out out/report.pdf`.

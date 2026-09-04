@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { RawDocument } from "../src/document.js";
 import { prepare } from "../src/pipeline.js";
 import { DJ_EXAMPLE, FIXTURES_DIR } from "./util.js";
@@ -52,7 +52,14 @@ test("unicode fixture: HTML injection is escaped, never raw", () => {
   assert.ok(html.includes("https://example.com/a?b=1&amp;c=2"), "URL & must be entity-escaped in text");
 });
 
-test("examples never leak executable content either", () => {
+test(
+  "examples never leak executable content either",
+  {
+    skip: !existsSync(DJ_EXAMPLE)
+      ? "example fixture absent (examples/ removed for public release)"
+      : false,
+  },
+  () => {
   for (const f of [DJ_EXAMPLE]) {
     const { html } = prepare(f, { outPath: "out/unused.pdf" });
     assert.ok(!/<script/i.test(html));

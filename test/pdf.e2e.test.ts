@@ -41,7 +41,15 @@ test("unicode fixture full pipeline", { skip: skipReason }, async () => {
   assert.ok(text.includes("<script>alert(1)</script>"), "escaped tag renders as visible text");
 });
 
-test("real examples: full pipeline on both JSON files", { skip: skipReason }, async () => {
+test("real examples: full pipeline on both JSON files", {
+  // skipReason is the chromium check (false when installed); add the
+  // fixture-absence check so the public-release state skips, not fails.
+  skip:
+    skipReason ||
+    (!existsSync(DJ_EXAMPLE) || !existsSync(GP_EXAMPLE)
+      ? "example fixtures absent (examples/ removed for public release)"
+      : false),
+}, async () => {
   const cases: Array<[string, string, string]> = [
     [DJ_EXAMPLE, join(ROOT, "out", "e2e-dj.pdf"), "Development Plan for DJ-Aware Lyrics Sync Player"],
     [GP_EXAMPLE, join(ROOT, "out", "e2e-genetic-programming.pdf"), "Comprehensive Report on Genetic Programming"],
