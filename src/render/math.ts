@@ -30,8 +30,11 @@ let cachedStylesheet: string | null = null;
 
 /**
  * katex.min.css with every resolvable `url(...)` font reference rewritten to
- * a `data:<mime>;base64,...` URI. URLs that cannot be resolved on disk are
- * dropped; absolute / `data:` / `http(s):` references pass through untouched.
+ * `url("data:<mime>;base64,...")`. The `url(...)` wrapper is required — a
+ * bare `data:` token is not a valid CSS `<url>` value, so headless Chromium
+ * silently ignores such `@font-face` src lists and falls back to system
+ * fonts (math ends up in Times in the PDF). Unresolvable URLs are dropped;
+ * absolute / `data:` / `http(s):` references pass through untouched.
  */
 export function katexStylesheet(): string {
   if (cachedStylesheet !== null) return cachedStylesheet;
@@ -56,7 +59,7 @@ export function katexStylesheet(): string {
         const abs = join(cssDir, target);
         if (!existsSync(abs)) return ""; // skip unresolvable url()
         const mime = FONT_MIME[extname(abs).toLowerCase()] ?? "application/octet-stream";
-        return `data:${mime};base64,${readFileSync(abs).toString("base64")}`;
+        return `url("data:${mime};base64,${readFileSync(abs).toString("base64")}")`;
       },
     );
   } catch {
