@@ -75,12 +75,43 @@ export function katexStylesheet(): string {
 // ---------------------------------------------------------------------------
 
 /**
+ * Structural well-formedness gate applied before KaTeX ever sees a region.
+ * Returns false when the tex has any of: an interior `$` (a mis-split
+ * region), or unbalanced `{`/`}` (count mismatch, escaped pairs ignored). It
+ * deliberately does NOT balance delimiter commands — kets (`|\psi\rangle`)
+ * and norms (`|x\rvert`) are legitimately asymmetric (`\rangle` with no
+ * `\langle` is valid math); delimiter truncation still degrades safely via
+ * the existing throwOnError fallback. Such regions are
+ * emitted as plain text instead — a mis-split `a$̲S_A$ = -b` or a truncated
+ * `\left(\sum…` would otherwise surface to API users as a scary
+ * `KaTeX parse error: …` warning.
+ */
+export function _isWellFormedMath(tex: string): boolean {
+  if (tex.includes("$")) return false;
+  let depth = 0;
+  for (let i = 0; i < tex.length; i++) {
+    const c = tex[i];
+    if (c === "\\") { i++; continue; }
+    if (c === "{") depth++;
+    else if (c === "}") { depth--; if (depth < 0) return false; }
+  }
+  return depth === 0;
+}
+
+/**
  * Render TeX to an HTML fragment via KaTeX (`renderToString`,
- * `throwOnError: true`). On any parse error, record `math: <message>` in
- * `warnings` and return an escaped, visibly-marked fallback span instead of
- * throwing — one bad formula never sinks the document.
+ * `throwOnError: true`). Regions that fail the structural gate
+ * (`_isWellFormedMath`) are returned as the escaped `math-fallback` span
+ * WITHOUT touching KaTeX and WITHOUT a scary warning — malformed model math
+ * degrades to plain text silently. Well-formed regions — including kets and
+ * norms — proceed to KaTeX; the rare well-formed-but-KaTeX-rejects case still
+ * records `math: <message>` in `warnings` and falls back.
  */
 export function renderMath(tex: string, display: boolean, warnings: string[]): string {
+  if (!_isWellFormedMath(tex)) {
+    console.debug(`math: malformed region rendered as plain text (no KaTeX call): ${tex.slice(0, 60)}`);
+    return `<span class="math-fallback">${escapeHtml(tex)}</span>`;
+  }
   try {
     return katex.renderToString(tex, { displayMode: display, throwOnError: true });
   } catch (err) {
