@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { prepare } from "../src/pipeline.js";
 import { _isWellFormedMath, renderMath } from "../src/render/math.js";
+import { renderMathText } from "../src/render/blocks.js";
 import { tempFile } from "./util.js";
 
 function docWith(blocks: Record<string, unknown> | Record<string, unknown>[]): string {
@@ -181,6 +182,71 @@ test("gate: well-formed tex still goes through KaTeX; well-formed-but-rejected s
   assert.ok(out2.includes('class="math-fallback"'), "KaTeX-rejected region falls back");
   assert.equal(w2.length, 1, "the rare well-formed-but-rejected case still warns");
   assert.ok(w2[0].startsWith("math:"), `expected a math warning, got: ${JSON.stringify(w2)}`);
+});
+
+test("executive_summary (flat strings) renders inline math: $H^A$⊗$H^B$ typesets, no literal $", () => {
+  const json = {
+    schema_version: "1.0",
+    report: {
+      metadata: { title: "Exec" },
+      executive_summary:
+        ["Tensors help: $H^A$⊗$H^B$ acts on the joint space, and $S_A = S_B$ for pure pairs."],
+      sections: [{ heading: "Section", blocks: [] }],
+      sources: [],
+    },
+  };
+  const f = tempFile("exec-math2.json", JSON.stringify(json));
+  const { html, warnings } = prepare(f, { outPath: "out/unused.pdf" });
+  assert.equal(katexCount(html), 3, "all three $…$ groups typeset");
+  assert.ok(!html.includes("$H^A$"), "no literal $ in output");
+  assert.ok(html.includes("⊗"), "the ⊗ between the groups stays prose text");
+  assert.ok(html.includes("Tensors help:"), "prose stays");
+  assert.deepEqual(warnings, [], "no warnings for well-formed exec math");
+});
+
+test("executive_summary without math is unchanged escaped text", () => {
+  const json = {
+    schema_version: "1.0",
+    report: {
+      metadata: { title: "Exec" },
+      executive_summary: ["No formulas here — just <prose> & more."],
+      sections: [{ heading: "Section", blocks: [] }],
+      sources: [],
+    },
+  };
+  const f = tempFile("exec-plain.json", JSON.stringify(json));
+  const { html, warnings } = prepare(f, { outPath: "out/unused.pdf" });
+  assert.ok(html.includes("No formulas here — just &lt;prose&gt; &amp; more."), "plain text escaped unchanged");
+  assert.equal(katexCount(html), 0);
+  assert.deepEqual(warnings, []);
+});
+
+test("executive_summary with a malformed segment -> plain text, no scary warning", () => {
+  const json = {
+    schema_version: "1.0",
+    report: {
+      metadata: { title: "Exec" },
+      executive_summary: ["Watch $\\frac{1$ closely in the summary."],
+      sections: [{ heading: "Section", blocks: [] }],
+      sources: [],
+    },
+  };
+  const f = tempFile("exec-bad.json", JSON.stringify(json));
+  const { html, warnings } = prepare(f, { outPath: "out/unused.pdf" });
+  assert.ok(html.includes('class="math-fallback"'), "malformed segment degrades to the fallback span");
+  assert.ok(html.includes("\\frac{1"), "raw tex visible in the fallback");
+  assert.deepEqual(warnings, [], "no scary warning for a structurally malformed segment");
+});
+
+test("renderMathText: interior-$ region -> fallback, no warning; clean text byte-identical", () => {
+  const w: string[] = [];
+  const out = renderMathText("x $$a$ y$$ z", w);
+  assert.ok(out.includes('class="math-fallback"'), "mis-split region becomes the fallback span");
+  assert.ok(out.includes("a$ y"), "the raw mis-split region is visible");
+  assert.deepEqual(w, [], "no warning");
+  const out2 = renderMathText("plain & <safe>", w);
+  assert.equal(out2, "plain &amp; &lt;safe&gt;", "math-free text is byte-identical to escapeHtml");
+  assert.deepEqual(w, []);
 });
 
 test("code_block language latex typesets as display; malformed falls back silently; other langs unchanged", () => {

@@ -117,6 +117,17 @@ function renderSpan(span: Span, warnings: string[]): string {
 }
 
 /**
+ * Inline math for a flat prose string with no citations — the same shared
+ * path the cited paragraph rendering uses: prose segments are HTML-escaped,
+ * `$…$` / `\(…\)` groups are typeset by renderMath (the `_isWellFormedMath`
+ * gate degrades malformed groups to plain text silently), everything else
+ * unchanged. For math-free input this is byte-identical to `escapeHtml`.
+ */
+export function renderMathText(text: string, warnings: string[]): string {
+  return renderCitedText(text, [], warnings);
+}
+
+/**
  * True when a span's trimmed text should receive a leading space in
  * joinSpans: it starts with a letter/digit, or it opens a math delimiter
  * (`$`, `$$`, `\(`, `\[`). The producer emits each inline formula as a
