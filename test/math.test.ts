@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { prepare } from "../src/pipeline.js";
-import { _isWellFormedMath, renderMath } from "../src/render/math.js";
+import { _isWellFormedMath, renderMath, _stripDollarDelimiters } from "../src/render/math.js";
 import { renderMathText } from "../src/render/blocks.js";
 import { tempFile } from "./util.js";
 
@@ -247,6 +247,39 @@ test("renderMathText: interior-$ region -> fallback, no warning; clean text byte
   const out2 = renderMathText("plain & <safe>", w);
   assert.equal(out2, "plain &amp; &lt;safe&gt;", "math-free text is byte-identical to escapeHtml");
   assert.deepEqual(w, []);
+});
+
+test("_stripDollarDelimiters: inline $ removed, $$ removed, escaped \\\$ preserved", () => {
+  assert.equal(
+    _stripDollarDelimiters("F($\\psi, \\rho$) = $\\operatorname{Tr}$[\\psi \\rho$]"),
+    "F(\\psi, \\rho) = \\operatorname{Tr}[\\psi \\rho]",
+    "all unescaped $ gone",
+  );
+  assert.equal(_stripDollarDelimiters("$$E=mc^2$$"), "E=mc^2", "$$ pair removed");
+  assert.equal(_stripDollarDelimiters("cost = \\$5"), "cost = \\$5", "escaped \\\$ preserved");
+});
+
+test("equation block with inline $ (undelimited) -> display math, no literal $", () => {
+  const f = tempFile(
+    "eq-inner-dollar.json",
+    docWith({ type: "equation", text: "[$\\hat{x},\\hat{p}$] = i\\hbar" }),
+  );
+  const { html, warnings } = prepare(f, { outPath: "out/unused.pdf" });
+  assert.ok(html.includes('class="katex-display"'), "typeset as a display equation");
+  assert.ok(!html.includes("$"), "no literal $ in the output");
+  assert.deepEqual(warnings, [], "clean equation must not warn");
+});
+
+test("equation block still malformed after $-strip -> plain-text fallback, no scary warning", () => {
+  const f = tempFile(
+    "eq-still-bad.json",
+    docWith({ type: "equation", text: "$\\sum_{j} V_{" }),
+  );
+  const { html, warnings } = prepare(f, { outPath: "out/unused.pdf" });
+  assert.ok(html.includes('class="math-fallback"'), "gate degrades the malformed equation to plain text");
+  assert.ok(html.includes("\\sum_{j} V_{"), "raw tex visible in the fallback");
+  assert.equal(katexCount(html), 0, "no KaTeX output");
+  assert.deepEqual(warnings, [], "no scary warning");
 });
 
 test("code_block language latex typesets as display; malformed falls back silently; other langs unchanged", () => {

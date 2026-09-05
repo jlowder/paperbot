@@ -14,7 +14,7 @@ import {
   type TableCell,
 } from "../document.js";
 import { citationSup, CITATION_MARKER_RE } from "../citations.js";
-import { renderMath, splitMath, stripMathDelimiters } from "./math.js";
+import { renderMath, splitMath, stripMathDelimiters, _stripDollarDelimiters } from "./math.js";
 
 /** Escape a string for safe use in an HTML text node. */
 export function escapeHtml(s: string): string {
@@ -295,7 +295,8 @@ export function renderBlock(block: Block, opts: BlockRenderOptions = {}): string
       // else renders as a plain code block, unchanged.
       if (block.language.toLowerCase() === "latex" || block.language.toLowerCase() === "tex") {
         const warnings: string[] = [];
-        const html = `<div class="equation">${renderMath(block.text.trim(), true, warnings)}</div>`;
+        const tex = _stripDollarDelimiters(block.text.trim());
+        const html = `<div class="equation">${renderMath(tex, true, warnings)}</div>`;
         reportWarnings(warnings, opts);
         return html;
       }
@@ -322,11 +323,21 @@ export function renderBlock(block: Block, opts: BlockRenderOptions = {}): string
     case "equation": {
       const t = block.text.trim();
       const tex = stripMathDelimiters(t);
-      // Typeset when the producer said so (language latex/tex) or when the
-      // text carries $$ / \[ \] delimiters; otherwise the plain div.
-      if (block.language.trim().toLowerCase() === "latex" || block.language.trim().toLowerCase() === "tex" || tex !== t) {
+      // Redundant inline `$` delimiters inside a display equation (a model
+      // artifact) are stripped: `F($\psi$) = $\operatorname{Tr}$$` ->
+      // `F(\psi) = \operatorname{Tr}…`. A `$`-bearing block without outer
+      // delimiters now typesets (its `$` were its delimiters).
+      const stripped = _stripDollarDelimiters(tex);
+      // Typeset when the producer said so (language latex/tex), when the
+      // text carried $$ / \[ \] delimiters, or when it carried inline `$`.
+      if (
+        block.language.trim().toLowerCase() === "latex" ||
+        block.language.trim().toLowerCase() === "tex" ||
+        tex !== t ||
+        stripped !== tex
+      ) {
         const warnings: string[] = [];
-        const html = `<div class="equation">${renderMath(tex, true, warnings)}</div>`;
+        const html = `<div class="equation">${renderMath(stripped, true, warnings)}</div>`;
         reportWarnings(warnings, opts);
         return html;
       }
