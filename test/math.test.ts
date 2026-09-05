@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { prepare } from "../src/pipeline.js";
+import { _isWellFormedMath, renderMath } from "../src/render/math.js";
 import { tempFile } from "./util.js";
 
 function docWith(blocks: Record<string, unknown> | Record<string, unknown>[]): string {
@@ -99,7 +100,7 @@ test("whitespace around $ and unpaired $ stay text; \\( \\) and \\$ behave", () 
   assert.deepEqual(warnings, []);
 });
 
-test("invalid tex in a span -> math-fallback span + exactly 1 warning", () => {
+test("malformed tex in a span (unbalanced brace) -> fallback span, NO scary warning (gate)", () => {
   const f = tempFile(
     "bad-tex.json",
     docWith({
@@ -109,11 +110,10 @@ test("invalid tex in a span -> math-fallback span + exactly 1 warning", () => {
     }),
   );
   const { html, warnings } = prepare(f, { outPath: "out/unused.pdf" });
-  assert.equal(warnings.length, 1, `expected one math warning, got: ${JSON.stringify(warnings)}`);
-  assert.ok(warnings[0].startsWith("math:"), `warning must be a math warning: ${warnings[0]}`);
+  assert.deepEqual(warnings, [], "structurally malformed tex must degrade silently");
   assert.ok(html.includes('class="math-fallback"'), "fallback span must be emitted");
   assert.ok(html.includes("\\frac{1"), "the bad tex must be visible in the fallback");
-  assert.equal(katexCount(html), 0, "no katex output for invalid tex");
+  assert.equal(katexCount(html), 0, "no katex output for malformed tex");
 });
 
 test("standalone math spans get a leading space from joinSpans; commas still glue", () => {
@@ -149,7 +149,41 @@ test("standalone math spans get a leading space from joinSpans; commas still glu
   assert.deepEqual(warnings, []);
 });
 
-test("code_block language latex typesets as display; invalid falls back; other langs unchanged", () => {
+test("gate: _isWellFormedMath structural checks (no delimiter balance)", () => {
+  assert.equal(_isWellFormedMath("a$b"), false, "interior $ is malformed");
+  assert.equal(_isWellFormedMath("\\sum_{j} V_{"), false, "unbalanced braces are malformed");
+  assert.equal(_isWellFormedMath("|\\psi\\rangle"), true, "ket is asymmetric but valid");
+  assert.equal(_isWellFormedMath("|x\\rvert"), true, "norm is asymmetric but valid");
+  assert.equal(_isWellFormedMath("\\langle\\phi|"), true, "bra is asymmetric but valid");
+  assert.equal(_isWellFormedMath("\\sum_{j=0}^{3} V_{j}"), true, "balanced equation is well-formed");
+  assert.equal(_isWellFormedMath("\\left( a \\right)"), true, "matched delimiters are well-formed");
+});
+
+test("gate: renderMath on malformed region -> fallback span, no warning", () => {
+  const w: string[] = [];
+  for (const tex of ["̲S_A$ = -$\\sum_n p_n\\log p_n", "\\frac{1"]) {
+    const out = renderMath(tex, false, w);
+    assert.ok(out.startsWith('<span class="math-fallback">'), `must be the fallback span for ${tex}`);
+  }
+  assert.deepEqual(w, [], "no scary warning may be emitted for malformed regions");
+});
+
+test("gate: well-formed tex still goes through KaTeX; well-formed-but-rejected still warns", () => {
+  const w: string[] = [];
+  for (const tex of ["\\sum_{j} V_{ij}", "|\\psi\\rangle", "|x\\rvert", "\\left( a \\right)"]) {
+    const out = renderMath(tex, false, w);
+    assert.ok(out.includes('class="katex"'), `KaTeX output expected for ${tex}`);
+    assert.ok(!out.includes("math-fallback"), `must NOT fall back for ${tex}`);
+  }
+  assert.deepEqual(w, [], "well-formed tex must not warn");
+  const w2: string[] = [];
+  const out2 = renderMath("\\foobar{1}", false, w2);
+  assert.ok(out2.includes('class="math-fallback"'), "KaTeX-rejected region falls back");
+  assert.equal(w2.length, 1, "the rare well-formed-but-rejected case still warns");
+  assert.ok(w2[0].startsWith("math:"), `expected a math warning, got: ${JSON.stringify(w2)}`);
+});
+
+test("code_block language latex typesets as display; malformed falls back silently; other langs unchanged", () => {
   const f = tempFile(
     "latex-code.json",
     docWith([
@@ -161,8 +195,8 @@ test("code_block language latex typesets as display; invalid falls back; other l
   const { html, warnings } = prepare(f, { outPath: "out/unused.pdf" });
   assert.equal(displayCount(html), 1, "valid latex block typesets as a display equation");
   assert.ok(html.includes('class="equation"'), "latex block renders in the equation container");
-  assert.equal((html.match(/class="math-fallback"/g) ?? []).length, 1, "invalid latex block falls back");
-  assert.equal(warnings.length, 1, "one warning for the invalid block");
+  assert.equal((html.match(/class="math-fallback"/g) ?? []).length, 1, "malformed latex block falls back");
+  assert.deepEqual(warnings, [], "structurally malformed block degrades silently (gate)");
   assert.ok(
     html.includes('<pre class="language-python"><code>print(1)</code></pre>'),
     "non-latex code blocks must be unchanged",
