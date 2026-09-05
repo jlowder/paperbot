@@ -3,7 +3,7 @@
  * No external resources: one embedded <style>, no <link>, no <script>.
  */
 import type { DocumentModel } from "../document.js";
-import { escapeHtml, renderBlock, renderReferences } from "./blocks.js";
+import { escapeHtml, renderBlock, renderMathText, renderReferences } from "./blocks.js";
 import { REPORT_CSS, MATH_CSS } from "./css.js";
 import { katexStylesheet } from "./math.js";
 
@@ -81,9 +81,13 @@ export function renderHtml(model: DocumentModel, opts: HtmlRenderOptions = {}): 
   // --- executive summary ---
   let execSummary = "";
   if (model.executiveSummary.length > 0) {
+    // Flat strings: run through the shared inline-math path (a lone
+    // `escapeHtml` used to show literal `$` for `$H^A$`-style formulas).
+    const mathWarnings: string[] = [];
     const paras = model.executiveSummary
-      .map((s) => `<p>${escapeHtml(s)}</p>`)
+      .map((s) => `<p>${renderMathText(s, mathWarnings)}</p>`)
       .join("");
+    for (const w of mathWarnings) opts.onWarning?.(w);
     execSummary = `<div class="exec-summary"><div class="label">Executive Summary</div>${paras}</div>`;
   }
 

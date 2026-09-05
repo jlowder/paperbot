@@ -131,6 +131,17 @@ export type MathSegment =
   | { kind: "math"; tex: string; display: boolean };
 
 /**
+ * Remove every unescaped `$` (and therefore `$$`) from a string, preserving
+ * `\$` (an escaped literal dollar). A display equation block is ONE pure
+ * LaTeX region; inline `$…$` segments inside it are redundant model
+ * artifacts (`F($\psi$) = …` -> `F(\psi) = …`) — see stripMathDelimiters for
+ * the outer-delimiter case.
+ */
+export function _stripDollarDelimiters(tex: string): string {
+  return tex.replace(/(?<!\\)\$/g, "");
+}
+
+/**
  * Strip one pair of `$$…$$` or `\[…\]` delimiters from a whole string (an
  * equation block). Returns the string unchanged when no pair wraps it.
  */
